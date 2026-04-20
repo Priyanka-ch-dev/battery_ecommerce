@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-x9de3c-a5p36@j!-ozprvkabyc2t0y8=915jn%zxnjcnmz0+-4
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '*']
 
 
 # Application definition
@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'django_filters',
     'drf_spectacular',
+    'corsheaders',
     'users.apps.UsersConfig',
     'sellers.apps.SellersConfig',
     'products.apps.ProductsConfig',
@@ -48,13 +49,17 @@ INSTALLED_APPS = [
     'payments.apps.PaymentsConfig',
     'services.apps.ServicesConfig',
     'reports.apps.ReportsConfig',
+    'contact',
+    
 ]
 
 AUTH_USER_MODEL = 'users.User'
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -158,7 +163,8 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'Official endpoints for the Multi-Vendor Battery Engine',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
-    'COMPONENT_SPLIT_REQUEST': True
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SECURITY': [{'jwt': []}]
 }
 
 from datetime import timedelta
@@ -167,3 +173,15 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+# CORS Settings
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5174",
+]
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+from corsheaders.defaults import default_headers
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "authorization",
+]
