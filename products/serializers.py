@@ -28,11 +28,12 @@ class ProductSpecificationSerializer(serializers.ModelSerializer):
 
 class ProductReviewSerializer(serializers.ModelSerializer):
     user_email = serializers.ReadOnlyField(source='user.email')
+    product_name = serializers.ReadOnlyField(source='product.name')
 
     class Meta:
         model = ProductReview
         fields = '__all__'
-        read_only_fields = ['user']
+        read_only_fields = ['user', 'is_approved']
 
 class ProductSerializer(serializers.ModelSerializer):
     images = ProductImageSerializer(many=True, read_only=True)
