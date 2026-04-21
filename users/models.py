@@ -24,6 +24,7 @@ class User(AbstractUser):
     email = models.EmailField(_('email address'), unique=True)
     role = models.CharField(max_length=15, choices=Role.choices, default=Role.CUSTOMER)
     phone_number = models.CharField(max_length=15, blank=True, null=True)
+    business_name = models.CharField(max_length=255, blank=True, null=True)
 
     objects = CustomUserManager()
 

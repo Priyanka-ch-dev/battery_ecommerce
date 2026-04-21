@@ -1,10 +1,11 @@
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, AddressViewSet, WishlistViewSet
+from .views import UserViewSet, AddressViewSet, WishlistViewSet,CustomerViewSet
 
 router = DefaultRouter()
-router.register(r'users', UserViewSet, basename='user')
 router.register(r'addresses', AddressViewSet, basename='address')
 router.register(r'wishlists', WishlistViewSet, basename='wishlist')
+router.register(r'', UserViewSet, basename='user')
+
 
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView

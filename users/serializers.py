@@ -7,11 +7,37 @@ User = get_user_model()
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
-    business_name = serializers.CharField(write_only=True, required=False)
+    
+    # Seller specific fields (not in User model)
+    gst_number = serializers.CharField(write_only=True, required=False)
+    pan_number = serializers.CharField(write_only=True, required=False)
+    aadhaar_number = serializers.CharField(write_only=True, required=False)
+    shop_license_number = serializers.CharField(write_only=True, required=False)
+    
+    # Documents
+    pan_card_copy = serializers.FileField(write_only=True, required=False)
+    aadhaar_card_copy = serializers.FileField(write_only=True, required=False)
+    shop_license_copy = serializers.FileField(write_only=True, required=False)
+    
+    # Bank Details
+    bank_account_name = serializers.CharField(write_only=True, required=False)
+    bank_account_number = serializers.CharField(write_only=True, required=False)
+    bank_ifsc = serializers.CharField(write_only=True, required=False)
+    bank_name = serializers.CharField(write_only=True, required=False)
+    bank_passbook_copy = serializers.FileField(write_only=True, required=False)
+    
+    # Address
+    business_address = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'role', 'phone_number', 'first_name', 'last_name', 'business_name']
+        fields = [
+            'username', 'email', 'password', 'role', 'phone_number', 'first_name', 'last_name',
+            'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
+            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy',
+            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
+            'business_address'
+        ]
 
     def validate_role(self, value):
         if value == User.Role.ADMIN:
@@ -20,8 +46,83 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Invalid role provided.")
         return value
 
+    def to_internal_value(self, data):
+        from django.http import QueryDict
+        if isinstance(data, QueryDict):
+            clean_data = data.copy()
+        elif isinstance(data, dict):
+            clean_data = data.copy()
+        else:
+            clean_data = data
+
+        role = clean_data.get('role', User.Role.CUSTOMER)
+        
+        seller_fields = [
+            'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
+            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy',
+            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
+            'business_address'
+        ]
+        
+        file_fields = ['pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'bank_passbook_copy']
+
+        if role != User.Role.SELLER:
+            for field in seller_fields:
+                if hasattr(clean_data, 'pop'):
+                    clean_data.pop(field, None)
+        else:
+            for field in file_fields:
+                if hasattr(clean_data, 'get'):
+                    val = clean_data.get(field)
+                    if val in ['', 'null', 'undefined', None]:
+                        try:
+                            clean_data.pop(field)
+                        except KeyError:
+                            pass
+                        
+        return super().to_internal_value(clean_data)
+
+    def validate(self, data):
+        role = data.get('role', User.Role.CUSTOMER)
+        business_name = data.get('business_name')
+        
+        seller_fields = [
+            'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
+            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy',
+            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
+            'business_address'
+        ]
+
+        if role == User.Role.SELLER:
+            if not business_name:
+                raise serializers.ValidationError({'business_name': "This field is mandatory for seller registration."})
+                
+            required_seller_fields = seller_fields.copy()
+            required_seller_fields.remove('business_name')
+            required_seller_fields.append('phone_number')
+
+            missing_fields = [field for field in required_seller_fields if not data.get(field)]
+            if missing_fields:
+                errors = {field: "This field is mandatory for seller registration." for field in missing_fields}
+                raise serializers.ValidationError(errors)
+        else:
+            # Customer role: Only basic fields are accepted.
+            for field in seller_fields:
+                data.pop(field, None)
+                
+        return data
+
     def create(self, validated_data):
-        business_name = validated_data.pop('business_name', None)
+        # Extract seller-specific data
+        seller_fields = [
+            'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
+            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy',
+            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
+            'business_address'
+        ]
+        seller_data = {field: validated_data.pop(field, None) for field in seller_fields}
+        business_name = validated_data.get('business_name')
+        
         user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
@@ -29,7 +130,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             role=validated_data.get('role', User.Role.CUSTOMER),
             phone_number=validated_data.get('phone_number', ''),
             first_name=validated_data.get('first_name', ''),
-            last_name=validated_data.get('last_name', '')
+            last_name=validated_data.get('last_name', ''),
+            business_name=business_name
         )
 
         if user.role == User.Role.SELLER:
@@ -37,7 +139,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             SellerProfile = apps.get_model('sellers', 'SellerProfile')
             SellerProfile.objects.create(
                 user=user, 
-                business_name=business_name or f"{user.username}'s Store"
+                business_name=business_name,
+                **seller_data
             )
 
         return user
@@ -75,9 +178,20 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
         # Expose basic user data in login response
-        data['user'] = {
+        user_data = {
             'id': self.user.id,
             'email': self.user.email,
             'role': self.user.role,
         }
+
+        # Include approval status for sellers
+        if self.user.role == 'SELLER':
+            try:
+                user_data['is_approved'] = self.user.seller_profile.is_approved
+                user_data['status'] = self.user.seller_profile.status
+            except AttributeError:
+                user_data['is_approved'] = False
+                user_data['status'] = 'PENDING'
+
+        data['user'] = user_data
         return data

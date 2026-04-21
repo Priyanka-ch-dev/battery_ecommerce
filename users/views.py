@@ -18,18 +18,34 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ['role']
 
     def get_queryset(self):
         if self.request.user.role == User.Role.ADMIN:
             return User.objects.all()
         return User.objects.filter(id=self.request.user.id)
 
+from core.permissions import IsOwnerOrAdmin
+
 class AddressViewSet(viewsets.ModelViewSet):
     serializer_class = AddressSerializer
     permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ['user', 'address_type', 'is_default']
+
+    def get_permissions(self):
+        if self.action in ['update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated(), IsOwnerOrAdmin()]
+        return super().get_permissions()
 
     def get_queryset(self):
-        return Address.objects.filter(user=self.request.user)
+        queryset = Address.objects.all() if self.request.user.role == User.Role.ADMIN else Address.objects.filter(user=self.request.user)
+        
+        # Explicitly handle user filtering for Admins
+        user_id = self.request.query_params.get('user')
+        if user_id and self.request.user.role == User.Role.ADMIN:
+            queryset = queryset.filter(user_id=user_id)
+            
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -43,5 +59,11 @@ class WishlistViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+class CustomerViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.filter(role="CUSTOMER")
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAdminUser]
 
 
