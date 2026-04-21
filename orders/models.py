@@ -6,11 +6,26 @@ from sellers.models import SellerProfile
 class Order(models.Model):
     class Status(models.TextChoices):
         PENDING = 'PENDING', 'Pending'
-        PROCESSING = 'PROCESSING', 'Processing'
-        COMPLETED = 'COMPLETED', 'Completed'
+        CONFIRMED = 'CONFIRMED', 'Confirmed'
+        ASSIGNED = 'ASSIGNED', 'Assigned'
+        SHIPPED = 'SHIPPED', 'Shipped'
+        OUT_FOR_DELIVERY = 'OUT_FOR_DELIVERY', 'Out for Delivery'
+        DELIVERED = 'DELIVERED', 'Delivered'
+        IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
         CANCELLED = 'CANCELLED', 'Cancelled'
+        REFUND_REQUESTED = 'REFUND_REQUESTED', 'Refund Requested'
+        REFUNDED = 'REFUNDED', 'Refunded'
+        COMPLETED = 'COMPLETED','Completed'
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders')
+    delivery_person = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='deliveries',
+        limit_choices_to={'role': 'SELLER'}
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     
     delivery_date = models.DateField(null=True, blank=True)
@@ -26,6 +41,14 @@ class Order(models.Model):
     shipping_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     grand_total = models.DecimalField(max_digits=10, decimal_places=2)
     
+    is_refunded = models.BooleanField(default=False)
+    refunded_at = models.DateTimeField(null=True, blank=True)
+    refund_reason = models.TextField(blank=True, null=True)
+
+    # Installation Fields
+    before_image = models.ImageField(upload_to='installations/before/', null=True, blank=True)
+    after_image = models.ImageField(upload_to='installations/after/', null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -41,3 +64,16 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.quantity} of {self.product.name if self.product else 'Deleted Product'}"
+
+class OrderTracking(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='tracking_history')
+    status = models.CharField(max_length=20, choices=Order.Status.choices)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Order #{self.order.id} - {self.status} at {self.created_at}"
