@@ -95,17 +95,104 @@ class CartViewSet(viewsets.ModelViewSet):
             "tax": order.tax
         })
 
+from rest_framework.exceptions import ValidationError
+
+from core.permissions import IsCustomer, IsOwnerOrAdmin, IsAdminUser
+from django.shortcuts import get_object_or_404
+from rest_framework import status
+
 class CartItemViewSet(viewsets.ModelViewSet):
     serializer_class = CartItemSerializer
-    permission_classes = [IsCustomer]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ['update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated(), IsOwnerOrAdmin()]
+        return [IsCustomer()]
+
+    def destroy(self, request, *args, **kwargs):
+        # Using get_object_or_404 as requested to avoid AttributeError (NoneType)
+        instance = get_object_or_404(self.get_queryset(), pk=kwargs.get('pk'))
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def get_queryset(self):
         if self.request.user.is_authenticated:
             return CartItem.objects.filter(cart__user=self.request.user)
         return CartItem.objects.none()
 
-class CouponViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Coupon.objects.filter(active=True)
+    def perform_create(self, serializer):
+        cart, created = Cart.objects.get_or_create(user=self.request.user)
+        serializer.save(cart=cart)
+
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+
+class CouponViewSet(viewsets.ModelViewSet):
     serializer_class = CouponSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
     search_fields = ['code']
     ordering_fields = ['valid_to', 'valid_from']
+    filterset_fields = ['active', 'discount_percent', 'discount_amount']
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'apply', 'validate']:
+            return [permissions.IsAuthenticated()]
+        return [IsAdminUser()]
+
+    def get_queryset(self):
+        # Admin can see all, customers only active ones
+        if not self.request.user.is_authenticated:
+            return Coupon.objects.none()
+            
+        if self.request.user.role == 'ADMIN':
+            return Coupon.objects.all()
+            
+        from django.utils import timezone
+        return Coupon.objects.filter(
+            active=True,
+            valid_from__lte=timezone.now(),
+            valid_to__gte=timezone.now()
+        )
+
+    @action(detail=False, methods=['post'])
+    def apply(self, request):
+        code = request.data.get('code')
+        if not code:
+            return Response({'error': 'Coupon code is required'}, status=400)
+            
+        from django.utils import timezone
+        try:
+            coupon = Coupon.objects.get(
+                code=code, 
+                active=True,
+                valid_from__lte=timezone.now(),
+                valid_to__gte=timezone.now()
+            )
+        except Coupon.DoesNotExist:
+            return Response({'error': 'Invalid or expired coupon code'}, status=400)
+            
+        # Associate with user's cart
+        cart, created = Cart.objects.get_or_create(user=request.user)
+        cart.coupon = coupon
+        cart.save()
+        
+        return Response({
+            'message': f'Coupon "{code}" applied successfully',
+            'discount': {
+                'percent': coupon.discount_percent,
+                'amount': coupon.discount_amount
+            }
+        })
+
+    @action(detail=False, methods=['post'])
+    def validate(self, request):
+        code = request.data.get('code')
+        try:
+            coupon = Coupon.objects.get(code=code, active=True)
+            from django.utils import timezone
+            if coupon.valid_from <= timezone.now() <= coupon.valid_to:
+                return Response(CouponSerializer(coupon).data)
+            return Response({'error': 'Coupon is expired or not yet valid'}, status=400)
+        except Coupon.DoesNotExist:
+            return Response({'error': 'Invalid coupon code'}, status=400)
