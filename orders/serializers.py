@@ -24,7 +24,7 @@ class CreateOrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ['id', 'product', 'quantity', 'delivery_date', 'delivery_time', 'user', 'status']
+        fields = ['id', 'product', 'quantity', 'delivery_date', 'delivery_time', 'user', 'status', 'shipping_address', 'billing_address']
         read_only_fields = ['id', 'user', 'status']
 
     def create(self, validated_data):
@@ -40,19 +40,14 @@ class CreateOrderSerializer(serializers.ModelSerializer):
         except Product.DoesNotExist:
             raise serializers.ValidationError({'product': 'Product not found'})
 
-        address = user.addresses.filter(is_default=True, address_type='SHIPPING').first()
-        shipping_address = f"{address.line1}, {address.city}, {address.state} {address.zipcode}" if address else "Not provided"
-        
-        billing_address_obj = user.addresses.filter(is_default=True, address_type='BILLING').first()
-        billing_address = f"{billing_address_obj.line1}, {billing_address_obj.city}, {billing_address_obj.state} {billing_address_obj.zipcode}" if billing_address_obj else shipping_address
+        shipping_address = validated_data.get('shipping_address')
+        billing_address = validated_data.get('billing_address')
 
         price = product_instance.special_price if product_instance.special_price else product_instance.price
         subtotal = price * Decimal(quantity)
         tax = subtotal * Decimal('0.18')
         grand_total = subtotal + tax
 
-        validated_data['shipping_address'] = shipping_address
-        validated_data['billing_address'] = billing_address
         validated_data['subtotal'] = subtotal
         validated_data['tax'] = tax
         validated_data['grand_total'] = grand_total
