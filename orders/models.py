@@ -27,6 +27,7 @@ class Order(models.Model):
         limit_choices_to={'role': 'SELLER'}
     )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    is_exchange = models.BooleanField(default=False)
     
     delivery_date = models.DateField(null=True, blank=True)
     delivery_time = models.CharField(max_length=50, null=True, blank=True)
@@ -61,6 +62,8 @@ class OrderItem(models.Model):
     seller = models.ForeignKey(SellerProfile, on_delete=models.SET_NULL, null=True)
     price = models.DecimalField(max_digits=10, decimal_places=2) # Price at the time of order
     quantity = models.PositiveIntegerField(default=1)
+    is_exchange = models.BooleanField(default=False)
+    exchange_discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     def __str__(self):
         return f"{self.quantity} of {self.product.name if self.product else 'Deleted Product'}"

@@ -8,8 +8,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'product', 'product_detail', 'quantity', 'price']
-        read_only_fields = ['order']
+        fields = ['id', 'product', 'product_detail', 'quantity', 'price', 'is_exchange', 'exchange_discount']
+        read_only_fields = ['order', 'exchange_discount']
 
     def validate(self, data):
         product = data.get('product')
@@ -21,10 +21,11 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class CreateOrderSerializer(serializers.ModelSerializer):
     product = serializers.IntegerField(write_only=True, required=True)
     quantity = serializers.IntegerField(write_only=True, required=False, default=1)
+    is_exchange = serializers.BooleanField(write_only=True, required=False, default=False)
 
     class Meta:
         model = Order
-        fields = ['id', 'product', 'quantity', 'delivery_date', 'delivery_time', 'user', 'status', 'shipping_address', 'billing_address']
+        fields = ['id', 'product', 'quantity', 'is_exchange', 'delivery_date', 'delivery_time', 'user', 'status', 'shipping_address', 'billing_address']
         read_only_fields = ['id', 'user', 'status']
 
     def create(self, validated_data):
@@ -33,6 +34,7 @@ class CreateOrderSerializer(serializers.ModelSerializer):
 
         product_id = validated_data.pop('product')
         quantity = validated_data.pop('quantity', 1)
+        is_exchange = validated_data.pop('is_exchange', False)
         user = validated_data.get('user')
         
         try:
@@ -44,10 +46,19 @@ class CreateOrderSerializer(serializers.ModelSerializer):
         billing_address = validated_data.get('billing_address')
 
         price = product_instance.special_price if product_instance.special_price else product_instance.price
-        subtotal = price * Decimal(quantity)
+        
+        exchange_discount = Decimal('0.00')
+        if is_exchange and product_instance.exchange_available:
+            exchange_discount = product_instance.exchange_discount
+        
+        # Apply discount to unit price for total calculation
+        effective_price = max(price - exchange_discount, Decimal('0.00'))
+        
+        subtotal = effective_price * Decimal(quantity)
         tax = subtotal * Decimal('0.18')
         grand_total = subtotal + tax
 
+        validated_data['is_exchange'] = is_exchange # Store summary in Order
         validated_data['subtotal'] = subtotal
         validated_data['tax'] = tax
         validated_data['grand_total'] = grand_total
@@ -59,7 +70,9 @@ class CreateOrderSerializer(serializers.ModelSerializer):
             product=product_instance,
             seller=product_instance.seller,
             price=price,
-            quantity=quantity
+            quantity=quantity,
+            is_exchange=is_exchange,
+            exchange_discount=exchange_discount
         )
         return order
 
@@ -137,7 +150,7 @@ class OrderItemFullSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'product_name', 'quantity', 'price', 'seller_name', 'seller_id']
+        fields = ['id', 'product_name', 'quantity', 'price', 'seller_name', 'seller_id', 'is_exchange', 'exchange_discount']
 
 class OrderFullDetailSerializer(serializers.ModelSerializer):
     items = OrderItemFullSerializer(many=True, read_only=True)
@@ -158,7 +171,7 @@ class OrderFullDetailSerializer(serializers.ModelSerializer):
             'billing_address', 'items', 'subtotal', 'tax', 'discount',
             'shipping_fee', 'grand_total', 'payment_details', 'tracking_history',
             'delivery_person', 'delivery_date', 'delivery_time', 'seller_earnings',
-            'customer_payment_status', 'delivery_payment_status'
+            'customer_payment_status', 'delivery_payment_status', 'is_exchange'
         ]
 
     def get_customer_payment_status(self, obj):
@@ -199,4 +212,5 @@ class OrderFullDetailSerializer(serializers.ModelSerializer):
                 'net_earning': net,
                 'settlement_status': settlement_status
             })
+        return earnings
 
