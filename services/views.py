@@ -14,12 +14,15 @@ class ServiceAvailabilityViewSet(viewsets.ReadOnlyModelViewSet):
 class ServiceBookingViewSet(viewsets.ModelViewSet):
     serializer_class = ServiceBookingSerializer
     permission_classes = [permissions.IsAuthenticated]
-    filterset_fields = ['status', 'scheduled_date']
+    filterset_fields = ['status', 'scheduled_date', 'order']
     search_fields = ['address']
     ordering_fields = ['scheduled_date', 'created_at']
 
     def get_queryset(self):
-        return ServiceBooking.objects.filter(customer=self.request.user)
+        user = self.request.user
+        if user.role == 'ADMIN':
+            return ServiceBooking.objects.all()
+        return ServiceBooking.objects.filter(customer=user)
 
     def perform_create(self, serializer):
         serializer.save(customer=self.request.user)

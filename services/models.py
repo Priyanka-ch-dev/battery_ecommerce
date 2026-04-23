@@ -21,6 +21,7 @@ class ServiceBooking(models.Model):
         CANCELLED = 'CANCELLED', 'Cancelled'
 
     customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='service_bookings')
+    order = models.ForeignKey('orders.Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='service_bookings')
     address = models.TextField()
     vehicle = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, null=True, related_name='service_bookings')
     scheduled_date = models.DateField()
