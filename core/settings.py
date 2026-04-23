@@ -190,3 +190,9 @@ from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "authorization",
 ]
+
+# Razorpay Settings (Temporary Placeholders)
+# These are placeholder keys and will be replaced with real keys later
+RAZORPAY_KEY_ID = "rzp_test_placeholder"
+RAZORPAY_KEY_SECRET = "placeholder_secret"
+

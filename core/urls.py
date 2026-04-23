@@ -43,6 +43,7 @@ urlpatterns = [
     path('api/services/', include('services.urls')),
     path('api/reports/', include('reports.urls')),
     path('api/contact/', include('contact.urls')),
+    path('api/locations/', include('users.location_urls')),
 ]
 
 if settings.DEBUG:
