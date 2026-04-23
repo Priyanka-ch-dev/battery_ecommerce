@@ -158,9 +158,12 @@ class AddressSerializer(serializers.ModelSerializer):
         read_only_fields = ['user']
 
 class WishlistSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
+
     class Meta:
         model = Wishlist
-        fields = '__all__'
+        fields = ['id', 'user', 'product', 'added_at', 'product_name', 'product_price']
         read_only_fields = ['user']
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
