@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from .models import Address, Wishlist
+from .models import Address, Wishlist, State, City, ServiceableCity
 
 User = get_user_model()
 
@@ -165,6 +165,25 @@ class WishlistSerializer(serializers.ModelSerializer):
         model = Wishlist
         fields = ['id', 'user', 'product', 'added_at', 'product_name', 'product_price']
         read_only_fields = ['user']
+
+class StateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = State
+        fields = ['id', 'name']
+
+class CitySerializer(serializers.ModelSerializer):
+    state = serializers.PrimaryKeyRelatedField(queryset=State.objects.all())
+
+    class Meta:
+        model = City
+        fields = ['id', 'name', 'state']
+
+class ServiceableCitySerializer(serializers.ModelSerializer):
+    city_name = serializers.ReadOnlyField(source='city.name')
+
+    class Meta:
+        model = ServiceableCity
+        fields = ['id', 'city', 'city_name', 'is_service_available']
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 

@@ -1,8 +1,8 @@
 from rest_framework import viewsets, permissions, generics
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.views import TokenObtainPairView
-from .models import Address, Wishlist
-from .serializers import UserSerializer, AddressSerializer, WishlistSerializer, CustomTokenObtainPairSerializer, RegisterSerializer
+from .models import Address, Wishlist, State, City
+from .serializers import UserSerializer, AddressSerializer, WishlistSerializer, CustomTokenObtainPairSerializer, RegisterSerializer, StateSerializer, CitySerializer
 
 User = get_user_model()
 
@@ -67,3 +67,68 @@ class CustomerViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAdminUser]
 
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+class StateViewSet(viewsets.ModelViewSet):
+    queryset = State.objects.all()
+    serializer_class = StateSerializer
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            from core.permissions import IsAdminUser
+            return [permissions.IsAuthenticated(), IsAdminUser()]
+        return [permissions.AllowAny()]
+
+class CityViewSet(viewsets.ModelViewSet):
+    serializer_class = CitySerializer
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            from core.permissions import IsAdminUser
+            return [permissions.IsAuthenticated(), IsAdminUser()]
+        return [permissions.AllowAny()]
+
+    def get_queryset(self):
+        state_id = self.request.query_params.get('state_id')
+        if state_id:
+            return City.objects.filter(state_id=state_id)
+        return City.objects.all()
+
+from .models import ServiceableCity
+from .serializers import ServiceableCitySerializer
+
+class ServiceableCityViewSet(viewsets.ModelViewSet):
+    queryset = ServiceableCity.objects.all()
+    serializer_class = ServiceableCitySerializer
+    
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            from core.permissions import IsAdminUser
+            return [permissions.IsAuthenticated(), IsAdminUser()]
+        return [permissions.AllowAny()]
+
+class ServiceAvailabilityView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        city_id = request.query_params.get('city_id')
+        city_name = request.query_params.get('city')
+
+        query = None
+        if city_id:
+            query = ServiceableCity.objects.filter(city_id=city_id)
+        elif city_name:
+            query = ServiceableCity.objects.filter(city__name__iexact=city_name)
+
+        if query and query.exists():
+            obj = query.first()
+            return Response({
+                "service_available": obj.is_service_available,
+                "message": "Service available" if obj.is_service_available else "City not serviceable"
+            })
+        
+        return Response({
+            "service_available": False,
+            "message": "City not serviceable"
+        })

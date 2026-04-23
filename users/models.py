@@ -67,3 +67,27 @@ class Wishlist(models.Model):
     def __str__(self):
         return f"{self.user.email} -> Product ID: {self.product_id}"
 
+class State(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+
+class City(models.Model):
+    state = models.ForeignKey(State, on_delete=models.CASCADE, related_name='cities')
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ('state', 'name')
+        verbose_name_plural = 'Cities'
+
+    def __str__(self):
+        return f"{self.name}, {self.state.name}"
+
+class ServiceableCity(models.Model):
+    city = models.OneToOneField(City, on_delete=models.CASCADE, related_name='service_availability')
+    is_service_available = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.city.name} - Service: {self.is_service_available}"
+
