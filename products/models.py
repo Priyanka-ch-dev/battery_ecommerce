@@ -26,6 +26,22 @@ class Brand(models.Model):
     def __str__(self):
         return self.name
 
+class Make(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+
+class VehicleModel(models.Model):
+    make = models.ForeignKey(Make, on_delete=models.CASCADE, related_name='models')
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ('make', 'name')
+
+    def __str__(self):
+        return f"{self.make.name} {self.name}"
+
 class Vehicle(models.Model):
     make = models.CharField(max_length=100)
     model = models.CharField(max_length=100)
@@ -40,6 +56,16 @@ class Product(models.Model):
     seller = models.ForeignKey(SellerProfile, on_delete=models.CASCADE, related_name='products', null=True, blank=True)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='products')
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, related_name='products')
+    
+    # Direct fields for Battery Finder and Location-based filtering
+    make = models.ForeignKey(Make, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    model = models.ForeignKey(VehicleModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    state = models.ForeignKey('users.State', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    city = models.ForeignKey('users.City', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    
+    # Exchange Feature
+    exchange_available = models.BooleanField(default=False)
+    exchange_discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
@@ -85,3 +111,15 @@ class ProductReview(models.Model):
 
     def __str__(self):
         return f"Review by {self.user.email} for {self.product.name} ({'Approved' if self.is_approved else 'Pending'})"
+
+class ComboProduct(models.Model):
+    name = models.CharField(max_length=255)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    image = models.ImageField(upload_to='combos/', blank=True, null=True)
+    inverter = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='inverter_combos')
+    battery = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='battery_combos')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name

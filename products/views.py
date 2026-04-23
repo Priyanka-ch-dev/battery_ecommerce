@@ -1,11 +1,12 @@
 from core.permissions import IsAdminOrReadOnly, IsAdminUser, IsApprovedSeller
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Category, Brand, Vehicle, Product, ProductReview, ProductImage, ProductSpecification
-from .serializers import CategorySerializer, BrandSerializer, VehicleSerializer, ProductSerializer, ProductReviewSerializer, ProductImageSerializer, ProductSpecificationSerializer
+from .models import Category, Brand, Vehicle, Product, ProductReview, ProductImage, ProductSpecification, Make, VehicleModel, ComboProduct
+from .serializers import CategorySerializer, BrandSerializer, VehicleSerializer, ProductSerializer, ProductReviewSerializer, ProductImageSerializer, ProductSpecificationSerializer, MakeSerializer, ModelSerializer, ComboProductSerializer
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import viewsets,filters,permissions
 from rest_framework.parsers import MultiPartParser,FormParser
+
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
@@ -29,6 +30,25 @@ class VehicleViewSet(viewsets.ModelViewSet):
     filterset_fields = ['make', 'model', 'year']
     search_fields = ['make', 'model', 'variant', 'registration_number']
     ordering_fields = ['make', 'year']
+
+class MakeViewSet(viewsets.ModelViewSet):
+    queryset = Make.objects.all()
+    serializer_class = MakeSerializer
+    permission_classes = [IsAdminOrReadOnly]
+    search_fields = ['name']
+    ordering_fields = ['name']
+
+class ModelViewSet(viewsets.ModelViewSet):
+    serializer_class = ModelSerializer
+    permission_classes = [IsAdminOrReadOnly]
+    search_fields = ['name']
+    ordering_fields = ['name']
+
+    def get_queryset(self):
+        make_id = self.request.query_params.get('make_id')
+        if make_id:
+            return VehicleModel.objects.filter(make_id=make_id)
+        return VehicleModel.objects.all()
 
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
@@ -59,6 +79,55 @@ class ProductViewSet(viewsets.ModelViewSet):
             except AttributeError:
                 # Should not happen due to IsApprovedSeller permission
                 serializer.save()
+
+    @action(detail=False, methods=['get'])
+    def types(self, request):
+        categories = Category.objects.values('id', 'name', 'slug')
+        return Response(categories)
+
+    @action(detail=False, methods=['get'])
+    def brands(self, request):
+        brands = Brand.objects.values('id', 'name', 'slug')
+        return Response(brands)
+
+    @action(detail=False, methods=['get'])
+    def filter(self, request):
+        """
+        Single API to handle all dropdown filters from frontend battery finder.
+        """
+        product_type = request.query_params.get('product_type')
+        make_id = request.query_params.get('make_id')
+        model_id = request.query_params.get('model_id')
+        brand_id = request.query_params.get('brand_id')
+        state_id = request.query_params.get('state_id')
+        city_id = request.query_params.get('city_id')
+
+        # Start with a performant queryset
+        queryset = Product.objects.all().select_related('category', 'brand', 'seller').prefetch_related('images')
+
+        if product_type:
+            queryset = queryset.filter(category_id=product_type)
+        
+        if brand_id:
+            queryset = queryset.filter(brand_id=brand_id)
+
+        if make_id:
+            queryset = queryset.filter(make_id=make_id)
+
+        if model_id:
+            queryset = queryset.filter(model_id=model_id)
+
+        if state_id:
+            queryset = queryset.filter(state_id=state_id)
+
+        if city_id:
+            queryset = queryset.filter(city_id=city_id)
+
+        queryset = queryset.distinct()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    
 
 class ProductImageViewSet(viewsets.ModelViewSet):
     queryset = ProductImage.objects.all()
@@ -145,3 +214,18 @@ class ProductReviewViewSet(viewsets.ModelViewSet):
         review.is_approved = False
         review.save()
         return Response({'status': 'review rejected', 'is_approved': False})
+
+class ComboProductViewSet(viewsets.ModelViewSet):
+    queryset = ComboProduct.objects.all()
+    serializer_class = ComboProductSerializer
+    permission_classes = [IsAdminOrReadOnly]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['is_active']
+    search_fields = ['name']
+    ordering_fields = ['price', 'created_at']
+
+    def get_queryset(self):
+        queryset = ComboProduct.objects.all()
+        if self.action == 'list':
+            return queryset.filter(is_active=True)
+        return queryset

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Category, Brand, Vehicle, Product, ProductImage, ProductSpecification, ProductReview
+from .models import Category, Brand, Vehicle, Product, ProductImage, ProductSpecification, ProductReview, Make, VehicleModel, ComboProduct
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
@@ -37,3 +37,27 @@ class ProductAdmin(admin.ModelAdmin):
 class ProductReviewAdmin(admin.ModelAdmin):
     list_display = ['product', 'user', 'rating', 'is_approved', 'created_at']
     list_filter = ['is_approved', 'rating']
+
+class VehicleModelInline(admin.TabularInline):
+    model = VehicleModel
+    extra = 1
+
+@admin.register(Make)
+class MakeAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name']
+    search_fields = ['name']
+    ordering = ['name']
+    inlines = [VehicleModelInline]
+
+@admin.register(VehicleModel)
+class VehicleModelAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'make']
+    list_filter = ['make']
+    search_fields = ['name']
+    ordering = ['name']
+
+@admin.register(ComboProduct)
+class ComboProductAdmin(admin.ModelAdmin):
+    list_display = ['name', 'price', 'inverter', 'battery', 'is_active', 'created_at']
+    list_filter = ['is_active', 'inverter', 'battery']
+    search_fields = ['name']
