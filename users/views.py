@@ -109,12 +109,17 @@ class ServiceableCityViewSet(viewsets.ModelViewSet):
         return [permissions.AllowAny()]
 
 class ServiceAvailabilityView(APIView):
-    permission_classes = [permissions.AllowAny]
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            from core.permissions import IsAdminUser
+            return [permissions.IsAuthenticated(), IsAdminUser()]
+        return [permissions.AllowAny()]
 
     def get(self, request):
+        """Public: Check if a city is serviceable"""
         city_id = request.query_params.get('city_id')
         city_name = request.query_params.get('city')
-
+        
         query = None
         if city_id:
             query = ServiceableCity.objects.filter(city_id=city_id)
@@ -131,4 +136,12 @@ class ServiceAvailabilityView(APIView):
         return Response({
             "service_available": False,
             "message": "City not serviceable"
-        })
+        }, status=200)
+
+    def post(self, request):
+        """Admin: Create a new serviceable city record"""
+        serializer = ServiceableCitySerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
