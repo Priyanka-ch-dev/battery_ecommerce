@@ -3,14 +3,18 @@ from .models import SellerProfile, SellerWallet, WithdrawalRequest, WalletTransa
 
 class SellerProfileSerializer(serializers.ModelSerializer):
     name = serializers.ReadOnlyField(source='user.username')
+    seller_name = serializers.SerializerMethodField()
     email = serializers.ReadOnlyField(source='user.email')
     gst = serializers.CharField(source='gst_number', required=False, allow_null=True)
     commission = serializers.DecimalField(source='commission_rate', max_digits=5, decimal_places=2, required=False)
 
+    def get_seller_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
+
     class Meta:
         model = SellerProfile
         fields = [
-            "id", "user", "name", "email", "business_name", "status", "commission", 
+            "id", "user", "name", "seller_name", "email", "business_name", "status", "commission", 
             "gst", "gst_number", "pan_number", "aadhaar_number", "shop_license_number",
 
             "pan_card_copy", "aadhaar_card_copy", "shop_license_copy", "authorized_letter",
