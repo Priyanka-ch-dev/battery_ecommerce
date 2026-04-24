@@ -180,10 +180,58 @@ class CitySerializer(serializers.ModelSerializer):
 
 class ServiceableCitySerializer(serializers.ModelSerializer):
     city_name = serializers.ReadOnlyField(source='city.name')
+    state_name = serializers.ReadOnlyField(source='city.state.name')
+    state = serializers.CharField(write_only=True, required=False) # Accept name or ID
+    state_id = serializers.IntegerField(write_only=True, required=False)
+    city = serializers.CharField() # Accept name or ID
 
     class Meta:
         model = ServiceableCity
-        fields = ['id', 'city', 'city_name', 'is_service_available']
+        fields = ['id', 'city', 'city_name', 'state', 'state_id', 'state_name', 'is_service_available']
+
+    def validate(self, data):
+        state_input = data.get('state') or data.get('state_id')
+        city_input = data.get('city')
+        
+        # 1. Resolve State
+        state_obj = None
+        if state_input:
+            if str(state_input).isdigit():
+                state_obj = State.objects.filter(id=state_input).first()
+            else:
+                state_obj = State.objects.filter(name__iexact=state_input).first()
+            
+            if not state_obj:
+                raise serializers.ValidationError({"state": f"State '{state_input}' not found."})
+
+        # 2. Resolve City
+        city_obj = None
+        if str(city_input).isdigit():
+            city_obj = City.objects.filter(id=city_input).first()
+        elif state_obj:
+            city_obj = City.objects.filter(name__iexact=city_input, state=state_obj).first()
+        else:
+            # If no state provided, try to find a unique city by name
+            cities = City.objects.filter(name__iexact=city_input)
+            if cities.count() > 1:
+                raise serializers.ValidationError({"city": f"Multiple cities named '{city_input}' found. Please specify the state."})
+            city_obj = cities.first()
+
+        if not city_obj:
+            raise serializers.ValidationError({"city": f"City '{city_input}' not found (context: {state_obj.name if state_obj else 'None'})."})
+
+        # Update data with the resolved city object
+        data['city'] = city_obj
+        return data
+
+    def create(self, validated_data):
+        city = validated_data.get('city')
+        # Use update_or_create to avoid IntegrityError on OneToOneField
+        obj, created = ServiceableCity.objects.update_or_create(
+            city=city,
+            defaults={'is_service_available': validated_data.get('is_service_available', True)}
+        )
+        return obj
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 

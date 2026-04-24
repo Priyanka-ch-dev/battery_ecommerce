@@ -119,12 +119,20 @@ class ServiceAvailabilityView(APIView):
         """Public: Check if a city is serviceable"""
         city_id = request.query_params.get('city_id')
         city_name = request.query_params.get('city')
+        state_id = request.query_params.get('state_id')
+        state_name = request.query_params.get('state')
         
-        query = None
+        query = ServiceableCity.objects.all()
         if city_id:
-            query = ServiceableCity.objects.filter(city_id=city_id)
+            query = query.filter(city_id=city_id)
         elif city_name:
-            query = ServiceableCity.objects.filter(city__name__iexact=city_name)
+            query = query.filter(city__name__iexact=city_name)
+            
+        # Apply State filtering if provided (supports ID or name)
+        if state_id:
+            query = query.filter(city__state_id=state_id)
+        elif state_name:
+            query = query.filter(city__state__name__iexact=state_name)
 
         if query and query.exists():
             obj = query.first()
