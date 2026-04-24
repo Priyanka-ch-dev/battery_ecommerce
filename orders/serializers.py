@@ -19,36 +19,54 @@ class OrderItemSerializer(serializers.ModelSerializer):
         return data
 
 class CreateOrderSerializer(serializers.ModelSerializer):
-    product = serializers.IntegerField(write_only=True, required=True)
+    product = serializers.IntegerField(write_only=True, required=False)
+    combo_product = serializers.IntegerField(write_only=True, required=False)
     quantity = serializers.IntegerField(write_only=True, required=False, default=1)
     is_exchange = serializers.BooleanField(write_only=True, required=False, default=False)
 
     class Meta:
         model = Order
-        fields = ['id', 'product', 'quantity', 'is_exchange', 'delivery_date', 'delivery_time', 'user', 'status', 'shipping_address', 'billing_address']
+        fields = ['id', 'product', 'combo_product', 'quantity', 'is_exchange', 'delivery_date', 'delivery_time', 'user', 'status', 'shipping_address', 'billing_address']
         read_only_fields = ['id', 'user', 'status']
 
     def create(self, validated_data):
-        from products.models import Product
+        from products.models import Product, ComboProduct
         from decimal import Decimal
 
-        product_id = validated_data.pop('product')
+        product_id = validated_data.pop('product', None)
+        combo_product_id = validated_data.pop('combo_product', None)
         quantity = validated_data.pop('quantity', 1)
         is_exchange = validated_data.pop('is_exchange', False)
         user = validated_data.get('user')
         
-        try:
-            product_instance = Product.objects.get(id=product_id)
-        except Product.DoesNotExist:
-            raise serializers.ValidationError({'product': 'Product not found'})
+        if not product_id and not combo_product_id:
+            raise serializers.ValidationError({'error': 'Either product or combo_product is required'})
 
         shipping_address = validated_data.get('shipping_address')
         billing_address = validated_data.get('billing_address')
 
-        price = product_instance.special_price if product_instance.special_price else product_instance.price
+        product_instance = None
+        combo_instance = None
+        price = Decimal('0.00')
+        seller = None
+
+        if product_id:
+            try:
+                product_instance = Product.objects.get(id=product_id)
+                price = product_instance.special_price if product_instance.special_price else product_instance.price
+                seller = product_instance.seller
+            except Product.DoesNotExist:
+                raise serializers.ValidationError({'product': 'Product not found'})
+        else:
+            try:
+                combo_instance = ComboProduct.objects.get(id=combo_product_id)
+                price = combo_instance.price
+                seller = combo_instance.inverter.seller # Use inverter's seller as primary
+            except ComboProduct.DoesNotExist:
+                raise serializers.ValidationError({'combo_product': 'Combo Product not found'})
         
         exchange_discount = Decimal('0.00')
-        if is_exchange and product_instance.exchange_available:
+        if is_exchange and product_instance and product_instance.exchange_available:
             exchange_discount = product_instance.exchange_discount
         
         # Apply discount to unit price for total calculation
@@ -68,7 +86,8 @@ class CreateOrderSerializer(serializers.ModelSerializer):
         OrderItem.objects.create(
             order=order,
             product=product_instance,
-            seller=product_instance.seller,
+            combo_product=combo_instance,
+            seller=seller,
             price=price,
             quantity=quantity,
             is_exchange=is_exchange,
@@ -144,13 +163,18 @@ class OrderCustomerDetailSerializer(serializers.ModelSerializer):
         fields = ['id', 'first_name', 'last_name', 'email', 'phone_number']
 
 class OrderItemFullSerializer(serializers.ModelSerializer):
-    product_name = serializers.ReadOnlyField(source='product.name')
+    product_name = serializers.SerializerMethodField()
     seller_name = serializers.ReadOnlyField(source='seller.business_name')
     seller_id = serializers.ReadOnlyField(source='seller.id')
 
     class Meta:
         model = OrderItem
         fields = ['id', 'product_name', 'quantity', 'price', 'seller_name', 'seller_id', 'is_exchange', 'exchange_discount']
+
+    def get_product_name(self, obj):
+        if obj.combo_product:
+            return f"Combo: {obj.combo_product.name}"
+        return obj.product.name if obj.product else "Deleted Product"
 
 class OrderFullDetailSerializer(serializers.ModelSerializer):
     items = OrderItemFullSerializer(many=True, read_only=True)
