@@ -61,6 +61,27 @@ class ProductViewSet(viewsets.ModelViewSet):
     ordering_fields = ['price', 'created_at']
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
+    def get_queryset(self):
+        queryset = Product.objects.all().select_related('category', 'brand', 'seller')
+        
+        # Log search query if present
+        search_query = self.request.query_params.get('search')
+        if search_query:
+            from .models import SearchQuery
+            from django.db.models import F
+            obj, created = SearchQuery.objects.get_or_create(query=search_query)
+            if not created:
+                obj.count = F('count') + 1
+                obj.save()
+        
+        # If user is a SELLER, they only see their own products in the dashboard
+        # But for public 'list' actions (like in the storefront), we show all active products.
+        # This check depends on the 'is_active' filter usually sent by storefront.
+        if self.request.user.is_authenticated and self.request.user.role == 'SELLER' and not self.request.query_params.get('is_active'):
+             return queryset.filter(seller__user=self.request.user)
+             
+        return queryset
+    
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated(), (IsAdminUser | IsApprovedSeller)()]

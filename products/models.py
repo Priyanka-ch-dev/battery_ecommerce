@@ -129,3 +129,13 @@ class ComboProduct(models.Model):
 
     def __str__(self):
         return self.name
+
+class SearchQuery(models.Model):
+    query = models.CharField(max_length=255)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    count = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.query
