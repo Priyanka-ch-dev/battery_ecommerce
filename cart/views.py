@@ -33,19 +33,34 @@ class CartViewSet(viewsets.ModelViewSet):
         if not items.exists():
             return Response({"error": "Cart is empty."}, status=400)
 
+        # Collect all products that need stock checking/locking
+        from products.models import Product, ComboProduct
+        product_ids = set()
+        for item in items:
+            if item.product:
+                product_ids.add(item.product.id)
+            elif item.combo_product:
+                product_ids.add(item.combo_product.inverter.id)
+                product_ids.add(item.combo_product.battery.id)
+        
         # Lock products to prevent race conditions
-        from products.models import Product
-        product_ids = items.values_list('product_id', flat=True)
         locked_products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids)}
 
         subtotal = Decimal('0.00')
         for item in items:
-            product = locked_products[item.product_id]
-            if product.stock < item.quantity:
-                return Response({"error": f"Not enough stock for {product.name}. Only {product.stock} left."}, status=400)
-                
-            price = product.special_price if product.special_price else product.price
-            subtotal += price * item.quantity
+            if item.product:
+                product = locked_products[item.product.id]
+                if product.stock < item.quantity:
+                    return Response({"error": f"Not enough stock for {product.name}. Only {product.stock} left."}, status=400)
+                price = product.special_price if product.special_price else product.price
+                subtotal += price * item.quantity
+            elif item.combo_product:
+                # Check both components
+                inv = locked_products[item.combo_product.inverter.id]
+                bat = locked_products[item.combo_product.battery.id]
+                if inv.stock < item.quantity or bat.stock < item.quantity:
+                    return Response({"error": f"Not enough component stock for {item.combo_product.name}."}, status=400)
+                subtotal += item.combo_product.price * item.quantity
 
         discount = Decimal('0.00')
         if cart.coupon and cart.coupon.active:
@@ -70,18 +85,36 @@ class CartViewSet(viewsets.ModelViewSet):
             grand_total=round(grand_total, 2)
         )
 
-        from sellers.models import SellerWallet
         for item in items:
-            product = locked_products[item.product_id]
-
-            price = product.special_price if product.special_price else product.price
-            OrderItem.objects.create(
-                order=order,
-                product=product,
-                seller=product.seller,
-                price=price,
-                quantity=item.quantity
-            )
+            if item.product:
+                product = locked_products[item.product.id]
+                product.stock -= item.quantity
+                product.save()
+                
+                price = product.special_price if product.special_price else product.price
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    seller=product.seller,
+                    price=price,
+                    quantity=item.quantity
+                )
+            elif item.combo_product:
+                # Deduct from both components
+                inv = locked_products[item.combo_product.inverter.id]
+                bat = locked_products[item.combo_product.battery.id]
+                inv.stock -= item.quantity
+                bat.stock -= item.quantity
+                inv.save()
+                bat.save()
+                
+                OrderItem.objects.create(
+                    order=order,
+                    combo_product=item.combo_product,
+                    seller=item.combo_product.inverter.seller,
+                    price=item.combo_product.price,
+                    quantity=item.quantity
+                )
             
         # Clear Cart
         items.delete()
