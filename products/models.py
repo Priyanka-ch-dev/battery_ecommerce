@@ -118,8 +118,14 @@ class ComboProduct(models.Model):
     image = models.ImageField(upload_to='combos/', blank=True, null=True)
     inverter = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='inverter_combos')
     battery = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='battery_combos')
+    seller = models.ForeignKey(SellerProfile, on_delete=models.CASCADE, related_name='combos', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def stock(self):
+        # Combo stock is the minimum of its components
+        return min(self.inverter.stock, self.battery.stock)
 
     def __str__(self):
         return self.name
