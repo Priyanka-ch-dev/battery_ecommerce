@@ -114,13 +114,29 @@ class ProductReview(models.Model):
 
 class ComboProduct(models.Model):
     name = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True, null=True, blank=True)
+    sku = models.CharField(max_length=100, unique=True, null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     image = models.ImageField(upload_to='combos/', blank=True, null=True)
+    
+    # Components
     inverter = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='inverter_combos')
     battery = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='battery_combos')
     seller = models.ForeignKey(SellerProfile, on_delete=models.CASCADE, related_name='combos', null=True, blank=True)
+    
+    # Metadata & Filtering
+    warranty = models.CharField(max_length=255, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Location Filtering
+    state = models.ForeignKey('users.State', on_delete=models.SET_NULL, null=True, blank=True, related_name='combos')
+    city = models.ForeignKey('users.City', on_delete=models.SET_NULL, null=True, blank=True, related_name='combos')
+    
+    # Vehicle Context
+    make = models.ForeignKey(Make, on_delete=models.SET_NULL, null=True, blank=True, related_name='combos')
+    model = models.ForeignKey(VehicleModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='combos')
+    compatible_vehicles = models.ManyToManyField(Vehicle, related_name='compatible_combos', blank=True)
 
     @property
     def stock(self):
@@ -129,6 +145,22 @@ class ComboProduct(models.Model):
 
     def __str__(self):
         return self.name
+
+class ComboProductSpecification(models.Model):
+    combo_product = models.ForeignKey(ComboProduct, on_delete=models.CASCADE, related_name='specifications')
+    key = models.CharField(max_length=100)
+    value = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.key}: {self.value} for {self.combo_product.name}"
+
+class ComboProductImage(models.Model):
+    combo_product = models.ForeignKey(ComboProduct, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='combos/', blank=True, null=True)
+    is_primary = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Image for {self.combo_product.name}"
 
 class SearchQuery(models.Model):
     query = models.CharField(max_length=255)

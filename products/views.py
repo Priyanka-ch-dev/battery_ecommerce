@@ -1,6 +1,6 @@
 from core.permissions import IsAdminOrReadOnly, IsAdminUser, IsApprovedSeller
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Category, Brand, Vehicle, Product, ProductReview, ProductImage, ProductSpecification, Make, VehicleModel, ComboProduct
+from .models import Category, Brand, Vehicle, Product, ProductReview, ProductImage, ProductSpecification, Make, VehicleModel, ComboProduct, ComboProductSpecification, ComboProductImage
 from .serializers import CategorySerializer, BrandSerializer, VehicleSerializer, ProductSerializer, ProductReviewSerializer, ProductImageSerializer, ProductSpecificationSerializer, MakeSerializer, ModelSerializer, ComboProductSerializer
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -241,12 +241,40 @@ class ComboProductViewSet(viewsets.ModelViewSet):
     serializer_class = ComboProductSerializer
     permission_classes = [IsAdminOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active']
-    search_fields = ['name']
+    filterset_fields = ['is_active', 'state', 'city', 'make', 'model', 'compatible_vehicles']
+    search_fields = ['name', 'slug', 'sku']
     ordering_fields = ['price', 'created_at']
 
     def get_queryset(self):
-        queryset = ComboProduct.objects.all()
-        if self.action == 'list':
+        queryset = ComboProduct.objects.all().select_related(
+            'inverter', 'battery', 'state', 'city', 'make', 'model', 'seller'
+        )
+        # Admins and Sellers can see all in dashboard, public only see active
+        if self.action == 'list' and not (self.request.user.is_authenticated and self.request.user.role in ['ADMIN', 'SELLER']):
             return queryset.filter(is_active=True)
         return queryset
+
+    @action(detail=False, methods=['get'])
+    def filter(self, request):
+        """
+        Dedicated filtering for Combo Packs (similar to Product Battery Finder).
+        """
+        make_id = request.query_params.get('make_id')
+        model_id = request.query_params.get('model_id')
+        state_id = request.query_params.get('state_id')
+        city_id = request.query_params.get('city_id')
+
+        queryset = self.get_queryset().filter(is_active=True)
+
+        if make_id:
+            queryset = queryset.filter(make_id=make_id)
+        if model_id:
+            queryset = queryset.filter(model_id=model_id)
+        if state_id:
+            queryset = queryset.filter(state_id=state_id)
+        if city_id:
+            queryset = queryset.filter(city_id=city_id)
+
+        queryset = queryset.distinct()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)

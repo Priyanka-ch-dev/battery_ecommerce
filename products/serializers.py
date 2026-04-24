@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Category, Brand, Vehicle, Product, ProductImage, ProductSpecification, ProductReview, Make, VehicleModel, ComboProduct
+from .models import Category, Brand, Vehicle, Product, ProductImage, ProductSpecification, ProductReview, Make, VehicleModel, ComboProduct, ComboProductSpecification, ComboProductImage
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -97,13 +97,36 @@ class ProductSerializer(serializers.ModelSerializer):
                 self.fields['seller'].required = False
                 self.fields['seller'].queryset = SellerProfile.objects.all()
 
+class ComboProductSpecificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ComboProductSpecification
+        fields = ['id', 'key', 'value']
+
+class ComboProductImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ComboProductImage
+        fields = ['id', 'image', 'is_primary']
+
 class ComboProductSerializer(serializers.ModelSerializer):
     inverter_name = serializers.ReadOnlyField(source='inverter.name')
     battery_name = serializers.ReadOnlyField(source='battery.name')
+    state_name = serializers.ReadOnlyField(source='state.name')
+    city_name = serializers.ReadOnlyField(source='city.name')
+    make_name = serializers.ReadOnlyField(source='make.name')
+    model_name = serializers.ReadOnlyField(source='model.name')
+    compatible_vehicles_details = VehicleSerializer(source='compatible_vehicles', many=True, read_only=True)
+    specifications = ComboProductSpecificationSerializer(many=True, read_only=True)
+    images = ComboProductImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = ComboProduct
-        fields = ['id', 'name', 'price', 'image', 'inverter', 'battery', 'inverter_name', 'battery_name', 'is_active', 'created_at']
+        fields = [
+            'id', 'name', 'slug', 'sku', 'price', 'image', 'inverter', 'battery', 
+            'inverter_name', 'battery_name', 'warranty', 'is_active', 'created_at',
+            'state', 'state_name', 'city', 'city_name', 'make', 'make_name', 
+            'model', 'model_name', 'compatible_vehicles', 'compatible_vehicles_details',
+            'specifications', 'images'
+        ]
 
     def validate(self, data):
         inverter = data.get('inverter')
