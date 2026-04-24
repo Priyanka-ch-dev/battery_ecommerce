@@ -98,11 +98,22 @@ class CreateOrderSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     user_email = serializers.ReadOnlyField(source='user.email')
+    customer_name = serializers.SerializerMethodField()
     delivery_person_name = serializers.SerializerMethodField()
+    payment_method = serializers.ReadOnlyField(source='payment.method')
+
+    def get_customer_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
 
     class Meta:
         model = Order
-        fields ='__all__'
+        fields = [
+            'id', 'items', 'user_email', 'customer_name', 'delivery_person_name', 
+            'payment_method', 'status', 'subtotal', 'tax', 'discount', 
+            'shipping_fee', 'grand_total', 'is_refunded', 'refunded_at', 
+            'delivery_person', 'shipping_address', 'billing_address', 'created_at',
+            'delivery_date', 'delivery_time'
+        ]
         read_only_fields = [
             'user', 'status', 'subtotal', 'tax', 'discount', 
             'shipping_fee', 'grand_total', 'is_refunded', 
@@ -164,17 +175,34 @@ class OrderCustomerDetailSerializer(serializers.ModelSerializer):
 
 class OrderItemFullSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField()
-    seller_name = serializers.ReadOnlyField(source='seller.business_name')
+    product_image = serializers.SerializerMethodField()
+    seller_name = serializers.SerializerMethodField()
     seller_id = serializers.ReadOnlyField(source='seller.id')
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'product_name', 'quantity', 'price', 'seller_name', 'seller_id', 'is_exchange', 'exchange_discount']
+        fields = ['id', 'product_name', 'product_image', 'quantity', 'price', 'seller_name', 'seller_id', 'is_exchange', 'exchange_discount']
 
     def get_product_name(self, obj):
         if obj.combo_product:
             return f"Combo: {obj.combo_product.name}"
         return obj.product.name if obj.product else "Deleted Product"
+
+    def get_product_image(self, obj):
+        request = self.context.get('request')
+        if obj.combo_product and obj.combo_product.image:
+            return request.build_absolute_uri(obj.combo_product.image.url) if request else obj.combo_product.image.url
+        if obj.product:
+            primary_img = obj.product.images.filter(is_primary=True).first()
+            if not primary_img:
+                primary_img = obj.product.images.first()
+            if primary_img:
+                return request.build_absolute_uri(primary_img.image.url) if request else primary_img.image.url
+        return None
+
+    def get_seller_name(self, obj):
+        if not obj.seller: return "N/A"
+        return f"{obj.seller.user.first_name} {obj.seller.user.last_name}".strip() or obj.seller.business_name
 
 class OrderFullDetailSerializer(serializers.ModelSerializer):
     items = OrderItemFullSerializer(many=True, read_only=True)
