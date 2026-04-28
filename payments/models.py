@@ -10,7 +10,9 @@ class Payment(models.Model):
     class CustomerStatus(models.TextChoices):
         PENDING = 'PENDING', 'Pending'
         COLLECTED = 'COLLECTED', 'Collected'
-        PAID = 'PAID', 'Paid'
+        SUCCESS = 'SUCCESS', 'Success'
+        FAILED = 'FAILED', 'Failed'
+        PAID = 'PAID', 'Paid' # Keeping for compatibility
 
     class DeliveryStatus(models.TextChoices):
         PENDING = 'PENDING', 'Pending'

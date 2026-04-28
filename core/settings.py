@@ -191,8 +191,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "authorization",
 ]
 
-# Razorpay Settings (Temporary Placeholders)
-# These are placeholder keys and will be replaced with real keys later
-RAZORPAY_KEY_ID = "rzp_test_placeholder"
-RAZORPAY_KEY_SECRET = "placeholder_secret"
+
+RAZORPAY_KEY_ID = config("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = config("RAZORPAY_KEY_SECRET")
 
