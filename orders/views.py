@@ -117,21 +117,36 @@ class OrderViewSet(viewsets.ModelViewSet):
     def process_seller_earnings(self, order):
         """
         Calculates and stores seller earnings when an order is delivered.
+        The assigned delivery_person (Seller) receives the shipping fee.
         """
+        seller_profits = {} # seller_id -> profit
+
         for item in order.items.all():
             if not item.seller: continue
             
-            # price - commission - delivery
+            # Profit = item price - commission
             price = item.price * item.quantity
             commission = price * (item.seller.commission_rate / 100)
-            delivery = order.shipping_fee # Deduct shipping fee
-            earnings = price - commission - delivery
+            profit = price - commission
             
-            wallet, _ = SellerWallet.objects.get_or_create(seller=item.seller)
+            seller_id = item.seller.id
+            seller_profits[seller_id] = seller_profits.get(seller_id, 0) + profit
+
+        # The assigned delivery person (must be a seller) gets the shipping fee
+        delivery_seller_profile = getattr(order.delivery_person, 'seller_profile', None) if order.delivery_person else None
+        if delivery_seller_profile and order.shipping_fee > 0:
+            ds_id = delivery_seller_profile.id
+            seller_profits[ds_id] = seller_profits.get(ds_id, 0) + order.shipping_fee
+
+        # Create wallet transactions
+        from sellers.models import SellerProfile
+        for seller_id, amount in seller_profits.items():
+            seller_profile = SellerProfile.objects.get(id=seller_id)
+            wallet, _ = SellerWallet.objects.get_or_create(seller=seller_profile)
             WalletTransaction.objects.create(
                 wallet=wallet,
                 transaction_type=WalletTransaction.Type.CREDIT,
-                amount=earnings,
+                amount=amount,
                 reference=f"Order #{order.id}",
                 status=WalletTransaction.Status.PENDING
             )

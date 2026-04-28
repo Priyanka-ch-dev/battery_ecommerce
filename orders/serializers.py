@@ -93,6 +93,16 @@ class CreateOrderSerializer(serializers.ModelSerializer):
             is_exchange=is_exchange,
             exchange_discount=exchange_discount
         )
+
+        # Create Payment record automatically
+        from payments.models import Payment
+        Payment.objects.create(
+            order=order,
+            amount=grand_total,
+            method=Payment.PaymentMethod.COD, # Default to COD, can be updated via Razorpay flow
+            status=Payment.CustomerStatus.PENDING
+        )
+        
         return order
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -122,9 +132,17 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
 
     def get_delivery_person_name(self, obj):
-        if not obj.delivery_person:
-            return "Not Assigned"
-        return f"{obj.delivery_person.first_name} {obj.delivery_person.last_name}".strip() or obj.delivery_person.email
+        # Prefer assigned delivery person full name
+        if obj.delivery_person:
+            return f"{obj.delivery_person.first_name} {obj.delivery_person.last_name}".strip() or obj.delivery_person.email
+            
+        # Fallback to the first item's seller's personal name
+        item = obj.items.first()
+        if item and item.seller:
+            user = item.seller.user
+            return f"{user.first_name} {user.last_name}".strip() or user.email
+            
+        return "Not Assigned"
 
 class OrderDeliverySerializer(serializers.ModelSerializer):
     """
@@ -164,7 +182,7 @@ class OrderPaymentStatusSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Payment
-        fields = ['method', 'method_display', 'status', 'status_display', 'transaction_id', 'razorpay_payment_id']
+        fields = ['method', 'method_display', 'status', 'status_display', 'transaction_id', 'razorpay_order_id', 'razorpay_payment_id']
 
 class OrderCustomerDetailSerializer(serializers.ModelSerializer):
     class Meta:
@@ -202,7 +220,8 @@ class OrderItemFullSerializer(serializers.ModelSerializer):
 
     def get_seller_name(self, obj):
         if not obj.seller: return "N/A"
-        return f"{obj.seller.user.first_name} {obj.seller.user.last_name}".strip() or obj.seller.business_name
+        user = obj.seller.user
+        return f"{user.first_name} {user.last_name}".strip() or user.email
 
 class OrderFullDetailSerializer(serializers.ModelSerializer):
     items = OrderItemFullSerializer(many=True, read_only=True)
@@ -239,30 +258,46 @@ class OrderFullDetailSerializer(serializers.ModelSerializer):
     def get_seller_earnings(self, obj):
         from sellers.models import WalletTransaction
         # Calculate earnings for each unique seller in the order
-        earnings = []
+        seller_profits = {} # business_name -> {gross, commission, delivery, net, status}
+        
         for item in obj.items.all():
             if not item.seller: continue
             
-            # Simple calculation: price - commission (e.g. 10%) - delivery charges
             price = item.price * item.quantity
             commission = price * (item.seller.commission_rate / 100)
-            delivery = obj.shipping_fee # Simplification
-            net = price - commission - delivery
+            net = price - commission
             
-            # Check settlement status
+            name = item.seller.business_name
+            if name not in seller_profits:
+                seller_profits[name] = {'gross': 0, 'commission': 0, 'delivery': 0, 'net': 0, 'seller_id': item.seller.id}
+            
+            seller_profits[name]['gross'] += price
+            seller_profits[name]['commission'] += commission
+            seller_profits[name]['net'] += net
+
+        # Add shipping fee to the assigned delivery person
+        delivery_seller = getattr(obj.delivery_person, 'seller_profile', None) if obj.delivery_person else None
+        if delivery_seller and obj.shipping_fee > 0:
+            name = delivery_seller.business_name
+            if name in seller_profits:
+                seller_profits[name]['delivery'] += obj.shipping_fee
+                seller_profits[name]['net'] += obj.shipping_fee
+            else:
+                seller_profits[name] = {
+                    'gross': 0, 'commission': 0, 'delivery': obj.shipping_fee, 
+                    'net': obj.shipping_fee, 'seller_id': delivery_seller.id
+                }
+
+        # Format for output and check settlement status
+        results = []
+        for name, data in seller_profits.items():
             tx = WalletTransaction.objects.filter(
-                wallet__seller=item.seller,
+                wallet__seller_id=data['seller_id'],
                 reference=f"Order #{obj.id}"
             ).first()
-            settlement_status = tx.status if tx else "PENDING"
-
-            earnings.append({
-                'seller_name': item.seller.business_name,
-                'gross': price,
-                'commission': commission,
-                'delivery_charge': delivery,
-                'net_earning': net,
-                'settlement_status': settlement_status
-            })
-        return earnings
+            data['settlement_status'] = tx.status if tx else "PENDING"
+            data['seller_name'] = name
+            results.append(data)
+            
+        return results
 
