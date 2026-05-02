@@ -21,7 +21,7 @@ class SellerProfileSerializer(serializers.ModelSerializer):
             "bank_account_name", "bank_account_number", "bank_ifsc", "bank_name", "bank_passbook_copy",
             "shop_image", "owner_image"
         ]
-        read_only_fields = ['user', 'status', 'commission', 'is_approved']
+        read_only_fields = ['user', 'status', 'is_approved']
 
 
 class WalletTransactionSerializer(serializers.ModelSerializer):
@@ -82,5 +82,8 @@ class AdminSellerCreateSerializer(serializers.Serializer):
             commission_rate=validated_data.get('commission_rate', 0.00),
             status=SellerProfile.Status.APPROVED # Auto-approve when created by admin
         )
+
+        # Initialize Wallet
+        SellerWallet.objects.create(seller=seller_profile)
         
         return seller_profile
