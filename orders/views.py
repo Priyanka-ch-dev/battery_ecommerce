@@ -42,12 +42,13 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Order.objects.all()
         
         if role == 'SELLER':
-            # Priority 1: Orders assigned to this seller for delivery/installation
-            # Priority 2: Orders containing items sold by this seller (if any)
+            from django.db.models import Q
             try:
-                assigned_orders = Order.objects.filter(delivery_person=user)
-                item_orders = Order.objects.filter(items__seller=user.seller_profile) if hasattr(user, 'seller_profile') else Order.objects.none()
-                return (assigned_orders | item_orders).distinct()
+                # Optimized query for all orders related to this seller
+                return Order.objects.filter(
+                    Q(delivery_person=user) | 
+                    Q(items__seller__user=user)
+                ).distinct().order_by('-created_at')
             except Exception:
                 return Order.objects.none()
         
@@ -119,18 +120,25 @@ class OrderViewSet(viewsets.ModelViewSet):
         Calculates and stores seller earnings when an order is delivered.
         The assigned delivery_person (Seller) receives the shipping fee.
         """
+        from decimal import Decimal
         seller_profits = {} # seller_id -> profit
 
         for item in order.items.all():
-            if not item.seller: continue
+            # Determine who gets the earning: item's seller, or fallback to delivery_person
+            earning_profile = None
+            if item.seller:
+                earning_profile = item.seller
+            elif order.delivery_person and hasattr(order.delivery_person, 'seller_profile'):
+                earning_profile = order.delivery_person.seller_profile
+                
+            if not earning_profile:
+                continue
             
-            # Profit = item price - commission
-            price = item.price * item.quantity
-            commission = price * (item.seller.commission_rate / 100)
-            profit = price - commission
+            # Use the pre-calculated earning from the order item
+            profit = item.seller_earning
             
-            seller_id = item.seller.id
-            seller_profits[seller_id] = seller_profits.get(seller_id, 0) + profit
+            seller_id = earning_profile.id
+            seller_profits[seller_id] = seller_profits.get(seller_id, Decimal('0.00')) + profit
 
         # The assigned delivery person (must be a seller) gets the shipping fee
         delivery_seller_profile = getattr(order.delivery_person, 'seller_profile', None) if order.delivery_person else None
@@ -139,17 +147,27 @@ class OrderViewSet(viewsets.ModelViewSet):
             seller_profits[ds_id] = seller_profits.get(ds_id, 0) + order.shipping_fee
 
         # Create wallet transactions
-        from sellers.models import SellerProfile
+        from sellers.models import SellerProfile, SellerWallet, WalletTransaction
         for seller_id, amount in seller_profits.items():
             seller_profile = SellerProfile.objects.get(id=seller_id)
             wallet, _ = SellerWallet.objects.get_or_create(seller=seller_profile)
+            
+            # Prevent double crediting for the same order
+            if WalletTransaction.objects.filter(wallet=wallet, reference=f"Order #{order.id}").exists():
+                continue
+
             WalletTransaction.objects.create(
                 wallet=wallet,
                 transaction_type=WalletTransaction.Type.CREDIT,
                 amount=amount,
                 reference=f"Order #{order.id}",
-                status=WalletTransaction.Status.PENDING
+                status=WalletTransaction.Status.SETTLED
             )
+            
+            # Instantly update available_balance and total_earned
+            wallet.available_balance += amount
+            wallet.total_earned += amount
+            wallet.save()
 
     @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser])
     def update_payment_status(self, request, pk=None):
@@ -237,6 +255,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         if new_status not in [choice[0] for choice in Order.Status.choices]:
             return Response({'error': 'Invalid status choice'}, status=status.HTTP_400_BAD_REQUEST)
 
+        old_status = order.status
         order.status = new_status
         order.save()
         
@@ -247,8 +266,23 @@ class OrderViewSet(viewsets.ModelViewSet):
             updated_by=request.user,
             notes=notes
         )
+
+        # Trigger wallet credit if order is completed or delivered
+        if new_status in [Order.Status.DELIVERED, Order.Status.COMPLETED] and old_status not in [Order.Status.DELIVERED, Order.Status.COMPLETED]:
+            self.process_seller_earnings(order)
         
         return Response({'status': f'Order status updated to {new_status}'})
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        queryset = self.get_queryset()
+        data = {
+            'total': queryset.count(),
+            'pending': queryset.filter(status__in=[Order.Status.PENDING, Order.Status.ASSIGNED]).count(),
+            'in_progress': queryset.filter(status__in=[Order.Status.IN_PROGRESS, Order.Status.SHIPPED, Order.Status.OUT_FOR_DELIVERY]).count(),
+            'completed': queryset.filter(status__in=[Order.Status.COMPLETED, Order.Status.DELIVERED]).count(),
+        }
+        return Response(data)
 
     @action(detail=True, methods=['get'])
     def tracking(self, request, pk=None):
@@ -302,5 +336,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             payment = order.payment
             payment.status = 'REFUNDED'
             payment.save()
+
+        return Response({'status': 'Order and Payment refunded successfully'})
 
         return Response({'status': 'Order and Payment refunded successfully'})

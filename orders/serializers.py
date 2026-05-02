@@ -8,7 +8,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'product', 'product_detail', 'quantity', 'price', 'is_exchange', 'exchange_discount']
+        fields = ['id', 'product', 'product_detail', 'quantity', 'price', 'is_exchange', 'exchange_discount', 'total_amount', 'commission_percentage', 'admin_commission_amount', 'seller_earning']
         read_only_fields = ['order', 'exchange_discount']
 
     def validate(self, data):
@@ -83,6 +83,15 @@ class CreateOrderSerializer(serializers.ModelSerializer):
 
         order = super().create(validated_data)
 
+        # Commission Calculations
+        commission_rate = Decimal('7.00')
+        if seller and seller.commission_rate > 0:
+            commission_rate = seller.commission_rate
+            
+        total_amount = effective_price * Decimal(quantity)
+        admin_commission_amount = (total_amount * commission_rate) / Decimal('100.00')
+        seller_earning = total_amount - admin_commission_amount
+
         OrderItem.objects.create(
             order=order,
             product=product_instance,
@@ -91,7 +100,11 @@ class CreateOrderSerializer(serializers.ModelSerializer):
             price=price,
             quantity=quantity,
             is_exchange=is_exchange,
-            exchange_discount=exchange_discount
+            exchange_discount=exchange_discount,
+            total_amount=total_amount,
+            commission_percentage=commission_rate,
+            admin_commission_amount=admin_commission_amount,
+            seller_earning=seller_earning
         )
 
         # Create Payment record automatically
@@ -158,7 +171,7 @@ class OrderDeliverySerializer(serializers.ModelSerializer):
             'id', 'status', 'items', 'customer_name', 
             'customer_phone', 'shipping_address', 
             'delivery_date', 'delivery_time',
-            'before_image', 'after_image'
+            'before_image', 'after_image', 'grand_total'
         ]
         read_only_fields = ['id', 'items', 'customer_name', 'customer_phone', 'shipping_address']
 
@@ -263,9 +276,9 @@ class OrderFullDetailSerializer(serializers.ModelSerializer):
         for item in obj.items.all():
             if not item.seller: continue
             
-            price = item.price * item.quantity
-            commission = price * (item.seller.commission_rate / 100)
-            net = price - commission
+            price = item.total_amount
+            commission = item.admin_commission_amount
+            net = item.seller_earning
             
             name = item.seller.business_name
             if name not in seller_profits:

@@ -29,11 +29,7 @@ def process_seller_commission(sender, instance, **kwargs):
                 
             for item in instance.items.all():
                 if item.product and item.seller:
-                    item_total = item.price * item.quantity
-                    commission_rate = item.seller.commission_rate
-                    
-                    admin_cut = (item_total * commission_rate) / Decimal('100.00')
-                    seller_earnings = item_total - admin_cut
+                    seller_earnings = item.seller_earning
                     
                     wallet, _ = SellerWallet.objects.get_or_create(seller=item.seller)
                     wallet.balance += round(seller_earnings, 2)
