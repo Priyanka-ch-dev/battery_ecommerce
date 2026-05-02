@@ -46,10 +46,17 @@ class ReportsViewSet(viewsets.ModelViewSet):
             total_revenue=Sum('grand_total'),
             total_gst=Sum('tax')
         )
+
+        from orders.models import OrderItem
+        commission_data = OrderItem.objects.filter(order__in=qs).aggregate(
+            total_commission=Sum('admin_commission_amount')
+        )
+
         return Response({
             'total_sales_count': data['total_sales_count'] or 0,
             'total_revenue': data['total_revenue'] or 0,
-            'total_gst': data['total_gst'] or 0
+            'total_gst': data['total_gst'] or 0,
+            'total_commission': commission_data['total_commission'] or 0
         })
 
     @action(detail=False, methods=['get'])
@@ -121,12 +128,14 @@ class ReportsViewSet(viewsets.ModelViewSet):
             return Response({
                 'metrics': {
                     'lifetime_sales': float(total_revenue),
+                    'lifetime_commission': float(OrderItem.objects.filter(order__in=completed_orders).aggregate(total=Sum('admin_commission_amount'))['total'] or 0),
                     'avg_order_value': round(float(avg_value), 2),
                     'total_orders': all_orders_count,
                     'total_sellers': seller_count,
                     'orders_today': orders_today,
                     'sellers_today': sellers_today,
                     'sales_today': float(sales_today),
+                    'commission_today': float(OrderItem.objects.filter(order__in=Order.objects.filter(created_at__date=today, status__in=[Order.Status.DELIVERED, Order.Status.COMPLETED])).aggregate(total=Sum('admin_commission_amount'))['total'] or 0),
                     'last_order': {
                         'id': last_order.id if last_order else None,
                         'created_at': last_order.created_at if last_order else None

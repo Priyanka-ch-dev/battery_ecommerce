@@ -192,6 +192,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 ]
 
 
+
 RAZORPAY_KEY_ID = config("RAZORPAY_KEY_ID")
 RAZORPAY_KEY_SECRET = config("RAZORPAY_KEY_SECRET")
 
