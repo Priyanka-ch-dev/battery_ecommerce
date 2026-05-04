@@ -126,22 +126,25 @@ class ProductViewSet(viewsets.ModelViewSet):
         # Start with a performant queryset
         queryset = Product.objects.all().select_related('category', 'brand', 'seller').prefetch_related('images')
 
-        if product_type:
+        def is_valid(val):
+            return val and str(val).lower() not in ['null', 'undefined', 'none', '']
+
+        if is_valid(product_type):
             queryset = queryset.filter(category_id=product_type)
         
-        if brand_id:
+        if is_valid(brand_id):
             queryset = queryset.filter(brand_id=brand_id)
 
-        if make_id:
+        if is_valid(make_id):
             queryset = queryset.filter(make_id=make_id)
 
-        if model_id:
+        if is_valid(model_id):
             queryset = queryset.filter(model_id=model_id)
 
-        if state_id:
+        if is_valid(state_id):
             queryset = queryset.filter(state_id=state_id)
 
-        if city_id:
+        if is_valid(city_id):
             queryset = queryset.filter(city_id=city_id)
 
         queryset = queryset.distinct()
@@ -266,13 +269,16 @@ class ComboProductViewSet(viewsets.ModelViewSet):
 
         queryset = self.get_queryset().filter(is_active=True)
 
-        if make_id:
+        def is_valid(val):
+            return val and str(val).lower() not in ['null', 'undefined', 'none', '']
+
+        if is_valid(make_id):
             queryset = queryset.filter(make_id=make_id)
-        if model_id:
+        if is_valid(model_id):
             queryset = queryset.filter(model_id=model_id)
-        if state_id:
+        if is_valid(state_id):
             queryset = queryset.filter(state_id=state_id)
-        if city_id:
+        if is_valid(city_id):
             queryset = queryset.filter(city_id=city_id)
 
         queryset = queryset.distinct()

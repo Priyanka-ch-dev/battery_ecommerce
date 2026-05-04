@@ -97,6 +97,15 @@ class ProductSerializer(serializers.ModelSerializer):
                 self.fields['seller'].required = False
                 self.fields['seller'].queryset = SellerProfile.objects.all()
 
+    def validate(self, data):
+        make = data.get('make')
+        model = data.get('model')
+        if make and not model:
+            raise serializers.ValidationError({"model": "Model is required if make is provided."})
+        if model and not make:
+            raise serializers.ValidationError({"make": "Make is required if model is provided."})
+        return data
+
 class ComboProductSpecificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ComboProductSpecification
@@ -134,4 +143,12 @@ class ComboProductSerializer(serializers.ModelSerializer):
         
         if inverter and battery and inverter == battery:
             raise serializers.ValidationError("Inverter and Battery cannot be the same product.")
+            
+        make = data.get('make')
+        model = data.get('model')
+        if make and not model:
+            raise serializers.ValidationError({"model": "Model is required if make is provided."})
+        if model and not make:
+            raise serializers.ValidationError({"make": "Make is required if model is provided."})
+            
         return data
