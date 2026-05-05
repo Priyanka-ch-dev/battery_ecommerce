@@ -44,6 +44,7 @@ urlpatterns = [
     path('api/reports/', include('reports.urls')),
     path('api/contact/', include('contact.urls')),
     path('api/locations/', include('users.location_urls')),
+    path('api/',include('invoices.urls'))
 ]
 
 if settings.DEBUG:

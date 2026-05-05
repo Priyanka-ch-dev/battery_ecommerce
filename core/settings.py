@@ -50,7 +50,7 @@ INSTALLED_APPS = [
     'services.apps.ServicesConfig',
     'reports.apps.ReportsConfig',
     'contact',
-    
+    'invoices',
 ]
 
 AUTH_USER_MODEL = 'users.User'
