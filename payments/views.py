@@ -12,25 +12,43 @@ class PaymentViewSet(viewsets.ModelViewSet):
     serializer_class = PaymentSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def perform_create(self, serializer):
-        order_id = self.request.data.get('order')
+    def create(self, request, *args, **kwargs):
+        order_id = request.data.get('order')
+        amount = request.data.get('amount')
+        
         if not order_id:
-            raise ValidationError({'order': 'Order is required.'})
+            return Response({'order': 'Order is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         from orders.models import Order
         try:
             order = Order.objects.get(id=order_id)
         except Order.DoesNotExist:
-            raise ValidationError({'order': 'Order does not exist.'})
+            return Response({'order': 'Order does not exist.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Check if payment already exists for this order
-        if Payment.objects.filter(order=order).exists():
-            existing_payment = Payment.objects.get(order=order)
-            # Update the existing payment with new data if necessary
-            serializer.instance = existing_payment
-            serializer.save()
+        payment = Payment.objects.filter(order=order).first()
+        
+        if payment:
+            # Update existing payment
+            serializer = self.get_serializer(payment, data=request.data, partial=True)
         else:
-            serializer.save(order=order)
+            # Create new payment
+            serializer = self.get_serializer(data=request.data)
+            
+        serializer.is_valid(raise_exception=True)
+        
+        # Use provided amount or fallback to order total
+        # We explicitly pass amount to save() to ensure it's used
+        save_kwargs = {'order': order}
+        if amount is not None:
+            save_kwargs['amount'] = amount
+        elif not payment:
+            # Only fallback for new payments, existing ones keep their amount if not provided
+            save_kwargs['amount'] = order.grand_total
+
+        serializer.save(**save_kwargs)
+        
+        return Response(serializer.data, status=status.HTTP_201_CREATED if not payment else status.HTTP_200_OK)
 
     def get_queryset(self):
         user = self.request.user
