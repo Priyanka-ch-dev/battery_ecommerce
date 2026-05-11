@@ -6,7 +6,7 @@ from .serializers import ContactSettingsSerializer
 
 class ContactSettingsView(APIView):
     def get_permissions(self):
-        if self.request.method == 'POST':
+        if self.request.method in ['POST', 'PUT', 'PATCH']:
             return [permissions.IsAdminUser()]
         return [permissions.AllowAny()]
 
@@ -28,6 +28,19 @@ class ContactSettingsView(APIView):
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED if not settings else status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request):
+        return self.post(request)
+
+    def patch(self, request):
+        settings = ContactSettings.objects.first()
+        if not settings:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = ContactSettingsSerializer(settings, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 from .models import ContactMessage
