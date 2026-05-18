@@ -32,7 +32,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/contact-settings/', ContactSettingsView.as_view(), name='api-contact-settings'),
-    path('api/', include(router.urls)), # Top-level categories, reviews, etc.
     path('api/users/', include('users.urls')),
     path('api/sellers/', include('sellers.urls')),
     path('api/seller/', include('sellers.urls')),
@@ -44,7 +43,8 @@ urlpatterns = [
     path('api/reports/', include('reports.urls')),
     path('api/contact/', include('contact.urls')),
     path('api/locations/', include('users.location_urls')),
-    path('api/',include('invoices.urls'))
+    path('api/',include('invoices.urls')),
+    path('api/', include(router.urls)), # Moved to bottom to prevent catch-all conflicts
 ]
 
 if settings.DEBUG:
