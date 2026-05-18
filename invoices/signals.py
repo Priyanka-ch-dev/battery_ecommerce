@@ -2,6 +2,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from payments.models import Payment
 from invoices.models import Invoice
+from invoices.utils import send_invoice_email
 
 @receiver(post_save, sender=Payment)
 def generate_invoice_on_payment(sender, instance, created, **kwargs):
@@ -12,13 +13,19 @@ def generate_invoice_on_payment(sender, instance, created, **kwargs):
     is_paid = instance.status in ['SUCCESS', 'PAID'] or (instance.method == 'COD' and instance.status == 'COLLECTED')
     payment_status = 'PAID' if is_paid else 'PENDING'
 
-    # If invoices already exist for this order, just update their payment status
+    # Handle existing invoices
     invoices = Invoice.objects.filter(order=order)
     if invoices.exists():
-        invoices.update(
-            payment_method=instance.method,
-            payment_status=payment_status
-        )
+        for inv in invoices:
+            old_status = inv.payment_status
+            inv.payment_method = instance.method
+            inv.payment_status = payment_status
+            inv.save()
+            
+            # If it just became paid, or if it's paid and we haven't sent it (optional check)
+            # User specifically asked to ensure it sends when successful/paid
+            if payment_status == 'PAID' and old_status != 'PAID':
+                send_invoice_email(inv)
         return
 
     # Group order items by seller to create one invoice per seller
@@ -39,7 +46,7 @@ def generate_invoice_on_payment(sender, instance, created, **kwargs):
         if not customer_name:
             customer_name = order.user.email
             
-        Invoice.objects.create(
+        new_invoice = Invoice.objects.create(
             order=order,
             seller=seller,
             customer_name=customer_name,
@@ -51,3 +58,6 @@ def generate_invoice_on_payment(sender, instance, created, **kwargs):
             payment_method=instance.method,
             payment_status=payment_status
         )
+        
+        # Auto-send email to customer
+        send_invoice_email(new_invoice)

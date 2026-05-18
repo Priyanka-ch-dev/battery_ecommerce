@@ -13,7 +13,7 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     """
     serializer_class = InvoiceSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['payment_status', 'payment_method', 'seller']
+    filterset_fields = ['payment_status', 'payment_method', 'seller', 'order']
     search_fields = ['customer_name', 'customer_email', 'invoice_id', 'order__id']
     ordering_fields = ['invoice_date', 'total_amount']
     ordering = ['-invoice_date']

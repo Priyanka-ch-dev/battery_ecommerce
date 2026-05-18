@@ -10,7 +10,7 @@ class Invoice(models.Model):
         
     class PaymentStatus(models.TextChoices):
         PENDING = 'PENDING', 'Pending'
-        PAID = 'PAID', 'Paid'
+        PAID = 'PAID', 'Paid'    
         
     invoice_id = models.CharField(max_length=50, unique=True, editable=False)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='invoices')
@@ -36,3 +36,4 @@ class Invoice(models.Model):
 
     def __str__(self):
         return f"Invoice {self.invoice_id} for Order {self.order.id}"
+
