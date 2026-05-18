@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import SimpleRouter
-from .views import CategoryViewSet, BrandViewSet, VehicleViewSet, ProductViewSet, ProductReviewViewSet, ProductImageViewSet, ProductSpecificationViewSet, MakeViewSet, ModelViewSet, ComboProductViewSet
+from .views import CategoryViewSet, BrandViewSet, VehicleViewSet, ProductViewSet, ProductReviewViewSet, ProductImageViewSet, ProductSpecificationViewSet, MakeViewSet, ModelViewSet, ComboProductViewSet, ComboProductImageViewSet, ComboProductSpecificationViewSet
 
 router = SimpleRouter()
 router.register(r'categories', CategoryViewSet, basename='category')
@@ -12,10 +12,11 @@ router.register(r'reviews', ProductReviewViewSet, basename='product-review')
 router.register(r'makes', MakeViewSet, basename='make')
 router.register(r'models', ModelViewSet, basename='model')
 router.register(r'combos', ComboProductViewSet, basename='combo-product')
+router.register(r'combo-product-images', ComboProductImageViewSet, basename='combo-product-image')
+router.register(r'combo-product-specifications', ComboProductSpecificationViewSet, basename='combo-product-specification')
 
 urlpatterns = [
     path('types/', ProductViewSet.as_view({'get': 'types'}), name='product-types'),
-    path('brands/', ProductViewSet.as_view({'get': 'brands'}), name='product-brands'),
     path('filter/', ProductViewSet.as_view({'get': 'filter'}), name='product-filter'),
     path('', ProductViewSet.as_view({'get': 'list', 'post': 'create'}), name='product-list'),
     path('<int:pk>/', ProductViewSet.as_view({

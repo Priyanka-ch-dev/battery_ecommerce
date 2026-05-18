@@ -54,14 +54,15 @@ class Vehicle(models.Model):
 
 class Product(models.Model):
     seller = models.ForeignKey(SellerProfile, on_delete=models.CASCADE, related_name='products', null=True, blank=True)
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='products')
-    brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, related_name='products')
+    category = models.ManyToManyField(Category, related_name='products', blank=True)
+    brand = models.ManyToManyField(Brand, related_name='products', blank=True)
     
     # Direct fields for Battery Finder and Location-based filtering
-    make = models.ForeignKey(Make, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
-    model = models.ForeignKey(VehicleModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
-    state = models.ForeignKey('users.State', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
-    city = models.ForeignKey('users.City', on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    make = models.ManyToManyField(Make, blank=True, related_name='products')
+    model = models.ManyToManyField(VehicleModel, blank=True, related_name='products')
+    state = models.ManyToManyField('users.State', blank=True, related_name='products')
+    city = models.ManyToManyField('users.City', blank=True, related_name='products')
+    pincodes = models.ManyToManyField('users.CityPincode', blank=True, related_name='products')
     
     # Exchange Feature
     exchange_available = models.BooleanField(default=False)
@@ -124,18 +125,28 @@ class ComboProduct(models.Model):
     battery = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='battery_combos')
     seller = models.ForeignKey(SellerProfile, on_delete=models.CASCADE, related_name='combos', null=True, blank=True)
     
+    # New Fields aligned with Product
+    category = models.ManyToManyField(Category, related_name='combos', blank=True)
+    brand = models.ManyToManyField(Brand, related_name='combos', blank=True)
+    description = models.TextField(blank=True, null=True)
+    special_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    exchange_available = models.BooleanField(default=False)
+    exchange_discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    view_count = models.PositiveIntegerField(default=0)
+
     # Metadata & Filtering
     warranty = models.CharField(max_length=255, null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     # Location Filtering
-    state = models.ForeignKey('users.State', on_delete=models.SET_NULL, null=True, blank=True, related_name='combos')
-    city = models.ForeignKey('users.City', on_delete=models.SET_NULL, null=True, blank=True, related_name='combos')
+    state = models.ManyToManyField('users.State', blank=True, related_name='combos')
+    city = models.ManyToManyField('users.City', blank=True, related_name='combos')
+    pincodes = models.ManyToManyField('users.CityPincode', blank=True, related_name='combos')
     
     # Vehicle Context
-    make = models.ForeignKey(Make, on_delete=models.SET_NULL, null=True, blank=True, related_name='combos')
-    model = models.ForeignKey(VehicleModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='combos')
+    make = models.ManyToManyField(Make, blank=True, related_name='combos')
+    model = models.ManyToManyField(VehicleModel, blank=True, related_name='combos')
     compatible_vehicles = models.ManyToManyField(Vehicle, related_name='compatible_combos', blank=True)
 
     @property

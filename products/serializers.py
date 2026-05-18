@@ -53,23 +53,49 @@ class ProductSerializer(serializers.ModelSerializer):
     reviews = ProductReviewSerializer(many=True, read_only=True)
     compatible_vehicles_details = VehicleSerializer(source='compatible_vehicles', many=True, read_only=True)
 
-    category_name = serializers.ReadOnlyField(source='category.name')
-    brand_name = serializers.ReadOnlyField(source='brand.name')
-    make_name = serializers.ReadOnlyField(source='make.name')
-    model_name = serializers.ReadOnlyField(source='model.name')
-    state_name = serializers.ReadOnlyField(source='state.name')
-    city_name = serializers.ReadOnlyField(source='city.name')
+    category_names = serializers.SerializerMethodField()
+    brand_names = serializers.SerializerMethodField()
+    make_names = serializers.SerializerMethodField()
+    model_names = serializers.SerializerMethodField()
+    state_names = serializers.SerializerMethodField()
+    city_names = serializers.SerializerMethodField()
+    pincode_names = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    product_type = serializers.SerializerMethodField()
+
+    def get_product_type(self, obj):
+        return 'single'
+
+    def get_category_names(self, obj):
+        return [c.name for c in obj.category.all()]
+
+    def get_brand_names(self, obj):
+        return [b.name for b in obj.brand.all()]
+
+    def get_make_names(self, obj):
+        return [m.name for m in obj.make.all()]
+
+    def get_model_names(self, obj):
+        return [m.name for m in obj.model.all()]
+
+    def get_state_names(self, obj):
+        return [s.name for s in obj.state.all()]
+
+    def get_city_names(self, obj):
+        return [c.name for c in obj.city.all()]
+
+    def get_pincode_names(self, obj):
+        return [p.pincode for p in obj.pincodes.all()]
 
     class Meta:
         model = Product
         fields = [
             'id', 'name', 'slug', 'sku', 'description', 'price', 'special_price', 
             'stock', 'is_active', 'warranty', 'view_count', 'created_at',
-            'category', 'category_name', 'brand', 'brand_name', 'seller',
-            'make', 'make_name', 'model', 'model_name', 'state', 'state_name', 
-            'city', 'city_name', 'image', 'exchange_available', 'exchange_discount',
-            'images', 'specifications', 'reviews', 'compatible_vehicles_details'
+            'category', 'category_names', 'brand', 'brand_names', 'seller',
+            'make', 'make_names', 'model', 'model_names', 'state', 'state_names', 
+            'city', 'city_names', 'pincodes', 'pincode_names', 'image', 'exchange_available', 'exchange_discount',
+            'images', 'specifications', 'reviews', 'compatible_vehicles_details', 'product_type'
         ]
         read_only_fields = ['seller']
 
@@ -98,12 +124,12 @@ class ProductSerializer(serializers.ModelSerializer):
                 self.fields['seller'].queryset = SellerProfile.objects.all()
 
     def validate(self, data):
-        make = data.get('make')
-        model = data.get('model')
-        if make and not model:
-            raise serializers.ValidationError({"model": "Model is required if make is provided."})
-        if model and not make:
-            raise serializers.ValidationError({"make": "Make is required if model is provided."})
+        makes = data.get('make', [])
+        models = data.get('model', [])
+        if makes and not models:
+            raise serializers.ValidationError({"model": "At least one model is required if make is provided."})
+        if models and not makes:
+            raise serializers.ValidationError({"make": "At least one make is required if model is provided."})
         return data
 
 class ComboProductSpecificationSerializer(serializers.ModelSerializer):
@@ -119,10 +145,39 @@ class ComboProductImageSerializer(serializers.ModelSerializer):
 class ComboProductSerializer(serializers.ModelSerializer):
     inverter_name = serializers.ReadOnlyField(source='inverter.name')
     battery_name = serializers.ReadOnlyField(source='battery.name')
-    state_name = serializers.ReadOnlyField(source='state.name')
-    city_name = serializers.ReadOnlyField(source='city.name')
-    make_name = serializers.ReadOnlyField(source='make.name')
-    model_name = serializers.ReadOnlyField(source='model.name')
+    state_names = serializers.SerializerMethodField()
+    city_names = serializers.SerializerMethodField()
+    pincode_names = serializers.SerializerMethodField()
+    make_names = serializers.SerializerMethodField()
+    model_names = serializers.SerializerMethodField()
+    category_names = serializers.SerializerMethodField()
+    brand_names = serializers.SerializerMethodField()
+    product_type = serializers.SerializerMethodField()
+
+    def get_product_type(self, obj):
+        return 'combo'
+
+    def get_category_names(self, obj):
+        return [c.name for c in obj.category.all()]
+
+    def get_brand_names(self, obj):
+        return [b.name for b in obj.brand.all()]
+
+    def get_make_names(self, obj):
+        return [m.name for m in obj.make.all()]
+
+    def get_model_names(self, obj):
+        return [m.name for m in obj.model.all()]
+
+    def get_state_names(self, obj):
+        return [s.name for s in obj.state.all()]
+
+    def get_city_names(self, obj):
+        return [c.name for c in obj.city.all()]
+
+    def get_pincode_names(self, obj):
+        return [p.pincode for p in obj.pincodes.all()]
+
     compatible_vehicles_details = VehicleSerializer(source='compatible_vehicles', many=True, read_only=True)
     specifications = ComboProductSpecificationSerializer(many=True, read_only=True)
     images = ComboProductImageSerializer(many=True, read_only=True)
@@ -130,11 +185,13 @@ class ComboProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = ComboProduct
         fields = [
-            'id', 'name', 'slug', 'sku', 'price', 'image', 'inverter', 'battery', 
-            'inverter_name', 'battery_name', 'warranty', 'is_active', 'created_at',
-            'state', 'state_name', 'city', 'city_name', 'make', 'make_name', 
-            'model', 'model_name', 'compatible_vehicles', 'compatible_vehicles_details',
-            'specifications', 'images'
+            'id', 'name', 'slug', 'sku', 'price', 'special_price', 'description', 'image', 'inverter', 'battery', 
+            'inverter_name', 'battery_name', 'warranty', 'is_active', 'created_at', 'view_count',
+            'category', 'category_names', 'brand', 'brand_names',
+            'state', 'state_names', 'city', 'city_names', 'pincodes', 'pincode_names', 'make', 'make_names', 
+            'model', 'model_names', 'compatible_vehicles', 'compatible_vehicles_details',
+            'exchange_available', 'exchange_discount',
+            'specifications', 'images', 'product_type'
         ]
 
     def validate(self, data):
@@ -144,11 +201,19 @@ class ComboProductSerializer(serializers.ModelSerializer):
         if inverter and battery and inverter == battery:
             raise serializers.ValidationError("Inverter and Battery cannot be the same product.")
             
-        make = data.get('make')
-        model = data.get('model')
-        if make and not model:
-            raise serializers.ValidationError({"model": "Model is required if make is provided."})
-        if model and not make:
-            raise serializers.ValidationError({"make": "Make is required if model is provided."})
+        makes = data.get('make', [])
+        models = data.get('model', [])
+        if makes and not models:
+            raise serializers.ValidationError({"model": "At least one model is required if make is provided."})
+        if models and not makes:
+            raise serializers.ValidationError({"make": "At least one make is required if model is provided."})
             
         return data
+
+class UnifiedProductSerializer(serializers.Serializer):
+    def to_representation(self, instance):
+        if isinstance(instance, Product):
+            return ProductSerializer(instance, context=self.context).data
+        elif isinstance(instance, ComboProduct):
+            return ComboProductSerializer(instance, context=self.context).data
+        return super().to_representation(instance)

@@ -30,7 +30,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'category', 'brand']
     search_fields = ['name', 'sku', 'description']
     prepopulated_fields = {'slug': ('name',)}
-    filter_horizontal = ['compatible_vehicles']
+    filter_horizontal = ['compatible_vehicles', 'category', 'brand', 'make', 'model', 'state', 'city']
     inlines = [ProductImageInline, ProductSpecificationInline]
 
 @admin.register(ProductReview)
@@ -61,3 +61,4 @@ class ComboProductAdmin(admin.ModelAdmin):
     list_display = ['name', 'price', 'inverter', 'battery', 'is_active', 'created_at']
     list_filter = ['is_active', 'inverter', 'battery']
     search_fields = ['name']
+    filter_horizontal = ['compatible_vehicles', 'category', 'brand', 'make', 'model', 'state', 'city']
