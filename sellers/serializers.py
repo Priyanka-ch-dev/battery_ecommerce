@@ -8,17 +8,22 @@ class SellerProfileSerializer(serializers.ModelSerializer):
     gst = serializers.CharField(source='gst_number', required=False, allow_null=True)
     commission = serializers.DecimalField(source='commission_rate', max_digits=5, decimal_places=2, required=False)
 
+    commission_amt = serializers.DecimalField(source='commission_amount', max_digits=10, decimal_places=2, required=False)
+    phone = serializers.ReadOnlyField(source='user.phone_number')
+    role = serializers.ReadOnlyField(source='user.role')
+
     def get_seller_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
 
     class Meta:
         model = SellerProfile
         fields = [
-            "id", "user", "name", "seller_name", "email", "business_name", "status", "commission", 
-            "gst", "gst_number", "pan_number", "aadhaar_number", "shop_license_number",
+            "id", "user", "name", "seller_name", "email", "phone", "role", "business_name", "status", 
+            "commission", "commission_amt", "gst", "gst_number", "pan_number", "aadhaar_number", 
+            "shop_license_number",
 
             "pan_card_copy", "aadhaar_card_copy", "shop_license_copy", "authorized_letter",
-            "bank_account_name", "bank_account_number", "bank_ifsc", "bank_name", "bank_passbook_copy",
+            "bank_account_name", "bank_account_number", "bank_ifsc", "bank_name", "bank_account_type", "bank_passbook_copy",
             "shop_image", "owner_image"
         ]
         read_only_fields = ['user', 'status', 'is_approved']
@@ -34,6 +39,8 @@ class WalletTransactionSerializer(serializers.ModelSerializer):
 
 class SettlementSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    transactions = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
 
     class Meta:
         model = Settlement
@@ -44,7 +51,10 @@ class SellerWalletSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SellerWallet
-        fields = ['id', 'seller', 'balance', 'total_earned', 'transactions']
+        fields = [
+            'id', 'seller', 'balance', 'available_balance', 'pending_balance', 
+            'payable_to_admin', 'total_withdrawn', 'total_earned', 'transactions'
+        ]
 
 class WithdrawalRequestSerializer(serializers.ModelSerializer):
     class Meta:
@@ -60,6 +70,7 @@ class AdminSellerCreateSerializer(serializers.Serializer):
     business_name = serializers.CharField(max_length=255)
     gst_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
     commission_rate = serializers.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    commission_amount = serializers.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     def create(self, validated_data):
         from django.contrib.auth import get_user_model
@@ -80,6 +91,7 @@ class AdminSellerCreateSerializer(serializers.Serializer):
             business_name=validated_data['business_name'],
             gst_number=validated_data.get('gst_number', ''),
             commission_rate=validated_data.get('commission_rate', 0.00),
+            commission_amount=validated_data.get('commission_amount', 0.00),
             status=SellerProfile.Status.APPROVED # Auto-approve when created by admin
         )
 

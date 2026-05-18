@@ -32,6 +32,7 @@ class SellerProfile(models.Model):
     bank_account_number = models.CharField(max_length=50, blank=True, null=True)
     bank_ifsc = models.CharField(max_length=20, blank=True, null=True)
     bank_name = models.CharField(max_length=255, blank=True, null=True)
+    bank_account_type = models.CharField(max_length=50, blank=True, null=True, help_text="Savings / Current / etc.")
     bank_passbook_copy = models.FileField(upload_to='seller_docs/bank/', blank=True, null=True)
     
     # Address
@@ -44,6 +45,7 @@ class SellerProfile(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     is_approved = models.BooleanField(default=False)
     commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Percentage commission, e.g., 5.00 for 5%")
+    commission_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Direct commission amount per sale")
     
     def save(self, *args, **kwargs):
         # Sync is_approved with status
