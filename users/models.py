@@ -84,6 +84,17 @@ class City(models.Model):
     def __str__(self):
         return f"{self.name}, {self.state.name}"
 
+class CityPincode(models.Model):
+    city = models.ForeignKey(City, on_delete=models.CASCADE, related_name='pincodes')
+    pincode = models.CharField(max_length=10)
+
+    class Meta:
+        unique_together = ('city', 'pincode')
+        verbose_name_plural = 'City Pincodes'
+
+    def __str__(self):
+        return f"{self.pincode} ({self.city.name})"
+
 class ServiceableCity(models.Model):
     city = models.OneToOneField(City, on_delete=models.CASCADE, related_name='service_availability')
     is_service_available = models.BooleanField(default=True)

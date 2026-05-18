@@ -1,7 +1,42 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from .models import Address, Wishlist, State, City, ServiceableCity
+from .models import Address, Wishlist, State, City, CityPincode, ServiceableCity
+
+class CityPincodeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CityPincode
+        fields = ['id', 'pincode']
+
+class CitySerializer(serializers.ModelSerializer):
+    pincodes = CityPincodeSerializer(many=True, read_only=True)
+    pincode_list = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
+    state = serializers.PrimaryKeyRelatedField(queryset=State.objects.all())
+
+    class Meta:
+        model = City
+        fields = ['id', 'name', 'state', 'pincodes', 'pincode_list']
+
+    def create(self, validated_data):
+        pincode_list = validated_data.pop('pincode_list', [])
+        city = City.objects.create(**validated_data)
+        for pin in pincode_list:
+            CityPincode.objects.create(city=city, pincode=pin.strip())
+        return city
+
+    def update(self, instance, validated_data):
+        pincode_list = validated_data.pop('pincode_list', None)
+        instance.name = validated_data.get('name', instance.name)
+        instance.state = validated_data.get('state', instance.state)
+        instance.save()
+
+        if pincode_list is not None:
+            # Refresh pincodes: Delete old ones and add new ones
+            instance.pincodes.all().delete()
+            for pin in pincode_list:
+                CityPincode.objects.create(city=instance, pincode=pin.strip())
+        
+        return instance
 
 User = get_user_model()
 
@@ -18,6 +53,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     pan_card_copy = serializers.FileField(write_only=True, required=False)
     aadhaar_card_copy = serializers.FileField(write_only=True, required=False)
     shop_license_copy = serializers.FileField(write_only=True, required=False)
+    shop_image = serializers.ImageField(write_only=True, required=False)
+    owner_image = serializers.ImageField(write_only=True, required=False)
     
     # Bank Details
     bank_account_name = serializers.CharField(write_only=True, required=False)
@@ -34,7 +71,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = [
             'username', 'email', 'password', 'role', 'phone_number', 'first_name', 'last_name',
             'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
-            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy',
+            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'shop_image', 'owner_image',
             'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
             'business_address'
         ]
@@ -59,12 +96,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         
         seller_fields = [
             'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
-            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy',
+            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'shop_image', 'owner_image',
             'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
             'business_address'
         ]
         
-        file_fields = ['pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'bank_passbook_copy']
+        file_fields = ['pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'bank_passbook_copy', 'shop_image', 'owner_image']
 
         if role != User.Role.SELLER:
             for field in seller_fields:
@@ -88,7 +125,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         
         seller_fields = [
             'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
-            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy',
+            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'shop_image', 'owner_image',
             'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
             'business_address'
         ]
@@ -116,7 +153,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         # Extract seller-specific data
         seller_fields = [
             'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
-            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy',
+            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'shop_image', 'owner_image',
             'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
             'business_address'
         ]
@@ -171,12 +208,6 @@ class StateSerializer(serializers.ModelSerializer):
         model = State
         fields = ['id', 'name']
 
-class CitySerializer(serializers.ModelSerializer):
-    state = serializers.PrimaryKeyRelatedField(queryset=State.objects.all())
-
-    class Meta:
-        model = City
-        fields = ['id', 'name', 'state']
 
 class ServiceableCitySerializer(serializers.ModelSerializer):
     city_name = serializers.ReadOnlyField(source='city.name')
@@ -257,11 +288,23 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Include approval status for sellers
         if self.user.role == 'SELLER':
             try:
-                user_data['is_approved'] = self.user.seller_profile.is_approved
-                user_data['status'] = self.user.seller_profile.status
+                status = self.user.seller_profile.status
+                is_approved = self.user.seller_profile.is_approved
             except AttributeError:
-                user_data['is_approved'] = False
-                user_data['status'] = 'PENDING'
+                status = 'PENDING'
+                is_approved = False
+
+            if status != 'APPROVED':
+                from rest_framework.exceptions import AuthenticationFailed
+                if status == 'PENDING':
+                    raise AuthenticationFailed("Your seller account is currently under admin review. Access to the Seller Dashboard will be enabled once your account has been approved.")
+                elif status == 'REJECTED':
+                    raise AuthenticationFailed("Your seller account has been rejected by the administrator.")
+                else:
+                    raise AuthenticationFailed("Your seller account has not yet been approved by the administrator.")
+
+            user_data['is_approved'] = is_approved
+            user_data['status'] = status
 
         data['user'] = user_data
         return data
