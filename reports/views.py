@@ -116,9 +116,19 @@ class ReportsViewSet(viewsets.ModelViewSet):
             # 4. Most Viewed (Recharts)
             most_viewed = Product.objects.filter(is_active=True).values('name', 'view_count').order_by('-view_count')[:7]
 
-            # 5. New Customers Growth (Recharts - last 7 weeks)
-            from django.db.models.functions import TruncWeek
-            customer_growth = User.objects.filter(role=User.Role.CUSTOMER).annotate(week=TruncWeek('date_joined')).values('week').annotate(count=Count('id')).order_by('week')[:7]
+            # 5. New Customers Growth (Recharts)
+            time_filter = request.query_params.get('filter', 'week')
+            from django.db.models.functions import TruncDay, TruncWeek, TruncMonth
+            
+            if time_filter == 'day':
+                customer_growth_qs = User.objects.filter(role=User.Role.CUSTOMER).annotate(period=TruncDay('date_joined')).values('period').annotate(count=Count('id')).order_by('period')[:7]
+                growth_data = [{'name': c['period'].strftime('%b %d'), 'count': c['count']} for c in customer_growth_qs]
+            elif time_filter == 'month':
+                customer_growth_qs = User.objects.filter(role=User.Role.CUSTOMER).annotate(period=TruncMonth('date_joined')).values('period').annotate(count=Count('id')).order_by('period')[:12]
+                growth_data = [{'name': c['period'].strftime('%b %Y'), 'count': c['count']} for c in customer_growth_qs]
+            else: # week
+                customer_growth_qs = User.objects.filter(role=User.Role.CUSTOMER).annotate(period=TruncWeek('date_joined')).values('period').annotate(count=Count('id')).order_by('period')[:7]
+                growth_data = [{'name': f"Week {i+1}", 'count': c['count']} for i, c in enumerate(customer_growth_qs)]
 
             # 6. Real Search Terms (Dynamic)
             from products.models import SearchQuery
@@ -143,9 +153,7 @@ class ReportsViewSet(viewsets.ModelViewSet):
                 },
                 'best_sellers': best_sellers,
                 'most_viewed': most_viewed,
-                'customer_growth': [
-                    {'name': f"Week {i+1}", 'count': c['count']} for i, c in enumerate(customer_growth)
-                ],
+                'customer_growth': growth_data,
                 'last_search_terms': list(last_search_terms),
                 'top_search_terms': list(top_search_terms)
             })
