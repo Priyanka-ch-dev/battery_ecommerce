@@ -124,15 +124,21 @@ class OrderSerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
     delivery_person_name = serializers.SerializerMethodField()
     payment_method = serializers.ReadOnlyField(source='payment.method')
+    payment_status = serializers.SerializerMethodField()
 
     def get_customer_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
+
+    def get_payment_status(self, obj):
+        if hasattr(obj, 'payment') and obj.payment:
+            return obj.payment.status
+        return "N/A"
 
     class Meta:
         model = Order
         fields = [
             'id', 'items', 'user_email', 'customer_name', 'delivery_person_name', 
-            'payment_method', 'status', 'subtotal', 'tax', 'discount', 
+            'payment_method', 'payment_status', 'status', 'subtotal', 'tax', 'discount', 
             'shipping_fee', 'grand_total', 'is_refunded', 'refunded_at', 
             'delivery_person', 'shipping_address', 'billing_address', 'created_at',
             'delivery_date', 'delivery_time'
@@ -157,27 +163,6 @@ class OrderSerializer(serializers.ModelSerializer):
             
         return "Not Assigned"
 
-class OrderDeliverySerializer(serializers.ModelSerializer):
-    """
-    Serializer for delivery personnel (Sellers) with limited customer data.
-    """
-    items = OrderItemSerializer(many=True, read_only=True)
-    customer_name = serializers.SerializerMethodField()
-    customer_phone = serializers.ReadOnlyField(source='user.phone_number')
-
-    class Meta:
-        model = Order
-        fields = [
-            'id', 'status', 'items', 'customer_name', 
-            'customer_phone', 'shipping_address', 
-            'delivery_date', 'delivery_time',
-            'before_image', 'after_image', 'grand_total'
-        ]
-        read_only_fields = ['id', 'items', 'customer_name', 'customer_phone', 'shipping_address']
-
-    def get_customer_name(self, obj):
-        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
-
 class OrderTrackingSerializer(serializers.ModelSerializer):
     updated_by_name = serializers.ReadOnlyField(source='updated_by.get_full_name')
     status_display = serializers.CharField(source='get_status_display', read_only=True)
@@ -186,6 +171,29 @@ class OrderTrackingSerializer(serializers.ModelSerializer):
         model = OrderTracking
         fields = ['id', 'status', 'status_display', 'updated_by_name', 'notes', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+class OrderDeliverySerializer(serializers.ModelSerializer):
+    """
+    Serializer for delivery personnel (Sellers) with limited customer data.
+    """
+    items = OrderItemSerializer(many=True, read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    customer_phone = serializers.ReadOnlyField(source='user.phone_number')
+    tracking_history = OrderTrackingSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            'id', 'status', 'items', 'customer_name', 
+            'customer_phone', 'shipping_address', 
+            'delivery_date', 'delivery_time',
+            'before_image', 'after_image', 'grand_total',
+            'tracking_history'
+        ]
+        read_only_fields = ['id', 'items', 'customer_name', 'customer_phone', 'shipping_address']
+
+    def get_customer_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
 
 # --- Specialized Serializers for Full Detail View ---
 
@@ -247,6 +255,7 @@ class OrderFullDetailSerializer(serializers.ModelSerializer):
     seller_earnings = serializers.SerializerMethodField()
     customer_payment_status = serializers.SerializerMethodField()
     delivery_payment_status = serializers.SerializerMethodField()
+    delivery_person_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -255,8 +264,22 @@ class OrderFullDetailSerializer(serializers.ModelSerializer):
             'billing_address', 'items', 'subtotal', 'tax', 'discount',
             'shipping_fee', 'grand_total', 'payment_details', 'tracking_history',
             'delivery_person', 'delivery_date', 'delivery_time', 'seller_earnings',
-            'customer_payment_status', 'delivery_payment_status', 'is_exchange'
+            'customer_payment_status', 'delivery_payment_status', 'is_exchange',
+            'delivery_person_name', 'created_at'
         ]
+
+    def get_delivery_person_name(self, obj):
+        # Prefer assigned delivery person full name
+        if obj.delivery_person:
+            return f"{obj.delivery_person.first_name} {obj.delivery_person.last_name}".strip() or obj.delivery_person.email
+            
+        # Fallback to the first item's seller's personal name
+        item = obj.items.first()
+        if item and item.seller:
+            user = item.seller.user
+            return f"{user.first_name} {user.last_name}".strip() or user.email
+            
+        return "Not Assigned"
 
     def get_customer_payment_status(self, obj):
         if hasattr(obj, 'payment') and obj.payment:

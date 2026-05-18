@@ -7,15 +7,22 @@ class Order(models.Model):
     class Status(models.TextChoices):
         PENDING = 'PENDING', 'Pending'
         CONFIRMED = 'CONFIRMED', 'Confirmed'
-        ASSIGNED = 'ASSIGNED', 'Assigned'
+        ASSIGNED = 'ASSIGNED', 'Order Assigned'
+        SCHEDULED = 'SCHEDULED', 'Installation Scheduled'
+        INSTALLATION_STARTED = 'INSTALLATION_STARTED', 'Installation Started'
+        IN_PROGRESS = 'IN_PROGRESS', 'Work In Progress'
+        CONTINUED_TOMORROW = 'CONTINUED_TOMORROW', 'Work Continued Tomorrow'
+        RESUMED = 'RESUMED', 'Installation Resumed'
+        COMPLETED = 'COMPLETED', 'Installation Completed'
+        AWAITING_CONFIRMATION = 'AWAITING_CONFIRMATION', 'Awaiting Customer Confirmation'
+        VERIFIED = 'VERIFIED', 'Installation Verified'
+        CLOSED = 'CLOSED', 'Closed Successfully'
         SHIPPED = 'SHIPPED', 'Shipped'
         OUT_FOR_DELIVERY = 'OUT_FOR_DELIVERY', 'Out for Delivery'
         DELIVERED = 'DELIVERED', 'Delivered'
-        IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
         CANCELLED = 'CANCELLED', 'Cancelled'
         REFUND_REQUESTED = 'REFUND_REQUESTED', 'Refund Requested'
         REFUNDED = 'REFUNDED', 'Refunded'
-        COMPLETED = 'COMPLETED','Completed'
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders')
     delivery_person = models.ForeignKey(
@@ -26,7 +33,7 @@ class Order(models.Model):
         related_name='deliveries',
         limit_choices_to={'role': 'SELLER'}
     )
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(max_length=30, choices=Status.choices, default=Status.PENDING)
     is_exchange = models.BooleanField(default=False)
     
     delivery_date = models.DateField(null=True, blank=True)
@@ -77,7 +84,7 @@ class OrderItem(models.Model):
 
 class OrderTracking(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='tracking_history')
-    status = models.CharField(max_length=20, choices=Order.Status.choices)
+    status = models.CharField(max_length=30, choices=Order.Status.choices)
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

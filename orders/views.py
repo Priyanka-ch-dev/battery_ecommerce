@@ -13,7 +13,7 @@ from payments.models import Payment
 
 class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    filterset_fields = ['user', 'status', 'delivery_date']
+    filterset_fields = ['user', 'status', 'delivery_date', 'delivery_person', 'items__seller']
     search_fields = ['id', 'user__email', 'shipping_address', 'billing_address']
     ordering_fields = ['created_at', 'grand_total']
 
@@ -39,13 +39,20 @@ class OrderViewSet(viewsets.ModelViewSet):
         is_admin = role == 'ADMIN' or getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False)
 
         if is_admin:
-            return Order.objects.all()
+            return Order.objects.select_related('payment', 'user').prefetch_related('items', 'items__product', 'items__seller').all()
         
         if role == 'SELLER':
+            # Safety check: restrict unapproved sellers
+            try:
+                if not user.seller_profile.is_approved:
+                    return Order.objects.none()
+            except AttributeError:
+                return Order.objects.none()
+
             from django.db.models import Q
             try:
                 # Optimized query for all orders related to this seller
-                return Order.objects.filter(
+                return Order.objects.select_related('payment', 'user').prefetch_related('items', 'items__product', 'items__seller').filter(
                     Q(delivery_person=user) | 
                     Q(items__seller__user=user)
                 ).distinct().order_by('-created_at')
@@ -53,7 +60,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 return Order.objects.none()
         
         if role == 'CUSTOMER':
-            return Order.objects.filter(user=user)
+            return Order.objects.select_related('payment', 'user').prefetch_related('items', 'items__product', 'items__seller').filter(user=user)
             
         return Order.objects.none()
 
@@ -111,8 +118,9 @@ class OrderViewSet(viewsets.ModelViewSet):
                 notes=f"Status updated to {new_status} via dashboard."
             )
             
-            # TRIGGER WALLET CREDIT IF DELIVERED
-            if new_status == Order.Status.DELIVERED:
+            # TRIGGER WALLET CREDIT IF DELIVERED/COMPLETED/VERIFIED/CLOSED
+            payout_statuses = [Order.Status.DELIVERED, Order.Status.COMPLETED, Order.Status.VERIFIED, Order.Status.CLOSED]
+            if new_status in payout_statuses and old_status not in payout_statuses:
                 self.process_seller_earnings(order)
 
     def process_seller_earnings(self, order):
@@ -161,12 +169,11 @@ class OrderViewSet(viewsets.ModelViewSet):
                 transaction_type=WalletTransaction.Type.CREDIT,
                 amount=amount,
                 reference=f"Order #{order.id}",
-                status=WalletTransaction.Status.SETTLED
+                status=WalletTransaction.Status.PENDING
             )
             
-            # Instantly update available_balance and total_earned
-            wallet.available_balance += amount
-            wallet.total_earned += amount
+            # Update pending_balance instead of available_balance
+            wallet.pending_balance += amount
             wallet.save()
 
     @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser])
@@ -231,25 +238,53 @@ class OrderViewSet(viewsets.ModelViewSet):
         
         # Role-based status restrictions for Sellers
         if self.request.user.role == 'SELLER':
-            # User requested flow: Pending -> In Progress -> Completed
-            # Mapping to model: PENDING -> IN_PROGRESS -> COMPLETED
-            allowed_seller_statuses = [
-                Order.Status.IN_PROGRESS, 
-                Order.Status.COMPLETED,
-                Order.Status.SHIPPED, 
-                Order.Status.OUT_FOR_DELIVERY, 
-                Order.Status.DELIVERED
-            ]
-            if new_status not in allowed_seller_statuses:
-                return Response({
-                    'error': f'Sellers can only update status to: {allowed_seller_statuses}'
-                }, status=status.HTTP_403_FORBIDDEN)
-            
             # Installation Image Uploads
             if 'before_image' in request.FILES:
                 order.before_image = request.FILES['before_image']
             if 'after_image' in request.FILES:
                 order.after_image = request.FILES['after_image']
+            
+            allowed_transitions = {
+                Order.Status.PENDING: [Order.Status.SCHEDULED, Order.Status.INSTALLATION_STARTED, Order.Status.IN_PROGRESS],
+                Order.Status.CONFIRMED: [Order.Status.SCHEDULED, Order.Status.INSTALLATION_STARTED, Order.Status.IN_PROGRESS],
+                Order.Status.ASSIGNED: [Order.Status.SCHEDULED, Order.Status.INSTALLATION_STARTED],
+                Order.Status.SCHEDULED: [Order.Status.INSTALLATION_STARTED, Order.Status.IN_PROGRESS],
+                Order.Status.INSTALLATION_STARTED: [Order.Status.IN_PROGRESS, Order.Status.CONTINUED_TOMORROW, Order.Status.COMPLETED],
+                Order.Status.IN_PROGRESS: [Order.Status.CONTINUED_TOMORROW, Order.Status.COMPLETED],
+                Order.Status.CONTINUED_TOMORROW: [Order.Status.RESUMED, Order.Status.IN_PROGRESS],
+                Order.Status.RESUMED: [Order.Status.IN_PROGRESS, Order.Status.CONTINUED_TOMORROW, Order.Status.COMPLETED],
+                Order.Status.COMPLETED: [Order.Status.AWAITING_CONFIRMATION],
+                Order.Status.AWAITING_CONFIRMATION: [],
+                Order.Status.VERIFIED: [],
+                Order.Status.CLOSED: [],
+            }
+            
+            current_status = order.status
+            valid_next_statuses = allowed_transitions.get(current_status, [])
+            
+            if current_status not in allowed_transitions:
+                valid_next_statuses = [
+                    Order.Status.SCHEDULED,
+                    Order.Status.INSTALLATION_STARTED,
+                    Order.Status.IN_PROGRESS,
+                    Order.Status.COMPLETED,
+                    Order.Status.SHIPPED,
+                    Order.Status.OUT_FOR_DELIVERY,
+                    Order.Status.DELIVERED
+                ]
+            
+            if new_status not in valid_next_statuses:
+                return Response({
+                    'error': f'Invalid status transition from "{current_status}" to "{new_status}". Allowed next states are: {valid_next_statuses}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+            if new_status == Order.Status.COMPLETED:
+                before_img = order.before_image or ('before_image' in request.FILES)
+                after_img = order.after_image or ('after_image' in request.FILES)
+                if not before_img or not after_img:
+                    return Response({
+                        'error': 'Before and After installation photos are required to complete the installation.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
         
         # Check if status is valid
         if new_status not in [choice[0] for choice in Order.Status.choices]:
@@ -264,11 +299,12 @@ class OrderViewSet(viewsets.ModelViewSet):
             order=order,
             status=new_status,
             updated_by=request.user,
-            notes=notes
+            notes=notes or f"Status updated to {new_status} via seller/delivery dashboard."
         )
 
-        # Trigger wallet credit if order is completed or delivered
-        if new_status in [Order.Status.DELIVERED, Order.Status.COMPLETED] and old_status not in [Order.Status.DELIVERED, Order.Status.COMPLETED]:
+        # Trigger wallet credit if order is completed or delivered/verified/closed
+        payout_statuses = [Order.Status.DELIVERED, Order.Status.COMPLETED, Order.Status.VERIFIED, Order.Status.CLOSED]
+        if new_status in payout_statuses and old_status not in payout_statuses:
             self.process_seller_earnings(order)
         
         return Response({'status': f'Order status updated to {new_status}'})
