@@ -4,7 +4,9 @@ from rest_framework.response import Response
 from django.db import transaction
 from decimal import Decimal
 from .models import Cart, CartItem, Coupon
-from orders.models import Order, OrderItem
+from orders.models import Order, OrderItem, DeliverySlot
+from contact.models import ContactSettings
+import re
 from .serializers import CartSerializer, CartItemSerializer, CouponSerializer
 from core.permissions import IsCustomer
 
@@ -25,9 +27,38 @@ class CartViewSet(viewsets.ModelViewSet):
         
         shipping_address = request.data.get('shipping_address')
         billing_address = request.data.get('billing_address')
+        delivery_date = request.data.get('delivery_date')
+        delivery_time = request.data.get('delivery_time')
+        pincode = request.data.get('pincode')
         
         if not shipping_address or not billing_address:
             return Response({"error": "Shipping and billing addresses are required."}, status=400)
+            
+        # Try to extract pincode from shipping_address if not provided
+        if not pincode and shipping_address:
+            match = re.search(r'\b\d{3}[\s-]*\d{3}\b', shipping_address)
+            if match:
+                pincode = re.sub(r'[\s-]', '', match.group(0))
+                
+        # Validate delivery slot
+        slot = None
+        if delivery_date and delivery_time:
+            if not pincode:
+                return Response({"error": "A valid 6-digit pincode is required in the shipping address to book a delivery slot."}, status=400)
+            
+            slot, created = DeliverySlot.objects.get_or_create(
+                date=delivery_date,
+                time_slot=delivery_time,
+                pincode=pincode,
+                defaults={'max_bookings': 1, 'is_active': True}
+            )
+            if not slot.is_active or slot.current_bookings >= slot.max_bookings:
+                contact_setting = ContactSettings.objects.first()
+                support_phone = contact_setting.support_phone if contact_setting and contact_setting.support_phone else "Support"
+                return Response({
+                    "error": "this delivery/installation slot is already booked for your area. Please select another available time slot or contact customer support contact",
+                    "support_message": f"For assistance or urgent bookings, please contact Customer Support {support_phone}"
+                }, status=400)
             
         items = cart.items.all()
         if not items.exists():
@@ -78,12 +109,19 @@ class CartViewSet(viewsets.ModelViewSet):
             user=user,
             shipping_address=shipping_address,
             billing_address=billing_address,
+            delivery_date=delivery_date,
+            delivery_time=delivery_time,
             subtotal=round(subtotal, 2),
             tax=round(tax, 2),
             discount=round(discount, 2),
             shipping_fee=round(shipping_fee, 2),
             grand_total=round(grand_total, 2)
         )
+        
+        # Increment slot bookings
+        if slot:
+            slot.current_bookings += 1
+            slot.save()
 
         for item in items:
             if item.product:
