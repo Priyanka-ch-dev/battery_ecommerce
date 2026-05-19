@@ -94,3 +94,17 @@ class OrderTracking(models.Model):
 
     def __str__(self):
         return f"Order #{self.order.id} - {self.status} at {self.created_at}"
+
+class DeliverySlot(models.Model):
+    pincode = models.CharField(max_length=20)
+    date = models.DateField()
+    time_slot = models.CharField(max_length=50)
+    max_bookings = models.PositiveIntegerField(default=1)
+    current_bookings = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ('pincode', 'date', 'time_slot')
+
+    def __str__(self):
+        return f"{self.time_slot} on {self.date} for {self.pincode}"

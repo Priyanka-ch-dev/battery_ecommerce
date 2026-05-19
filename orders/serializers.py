@@ -1,7 +1,12 @@
-from .models import Order, OrderItem, OrderTracking
+from .models import Order, OrderItem, OrderTracking, DeliverySlot
 from products.serializers import ProductSerializer
 from payments.models import Payment
 from rest_framework import serializers
+
+class DeliverySlotSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeliverySlot
+        fields = '__all__'
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product_detail = ProductSerializer(source='product', read_only=True)
@@ -23,10 +28,11 @@ class CreateOrderSerializer(serializers.ModelSerializer):
     combo_product = serializers.IntegerField(write_only=True, required=False)
     quantity = serializers.IntegerField(write_only=True, required=False, default=1)
     is_exchange = serializers.BooleanField(write_only=True, required=False, default=False)
+    pincode = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = Order
-        fields = ['id', 'product', 'combo_product', 'quantity', 'is_exchange', 'delivery_date', 'delivery_time', 'user', 'status', 'shipping_address', 'billing_address']
+        fields = ['id', 'product', 'combo_product', 'quantity', 'is_exchange', 'delivery_date', 'delivery_time', 'user', 'status', 'shipping_address', 'billing_address', 'pincode']
         read_only_fields = ['id', 'user', 'status']
 
     def create(self, validated_data):
@@ -44,6 +50,37 @@ class CreateOrderSerializer(serializers.ModelSerializer):
 
         shipping_address = validated_data.get('shipping_address')
         billing_address = validated_data.get('billing_address')
+        delivery_date = validated_data.get('delivery_date')
+        delivery_time = validated_data.get('delivery_time')
+        pincode = validated_data.pop('pincode', None)
+
+        import re
+        from orders.models import DeliverySlot
+        from contact.models import ContactSettings
+        
+        if not pincode and shipping_address:
+            match = re.search(r'\b\d{3}[\s-]*\d{3}\b', shipping_address)
+            if match:
+                pincode = re.sub(r'[\s-]', '', match.group(0))
+
+        slot = None
+        if delivery_date and delivery_time:
+            if not pincode:
+                raise serializers.ValidationError({"error": "A valid 6-digit pincode is required in the shipping address to book a delivery slot."})
+            
+            slot, created = DeliverySlot.objects.get_or_create(
+                date=delivery_date,
+                time_slot=delivery_time,
+                pincode=pincode,
+                defaults={'max_bookings': 1, 'is_active': True}
+            )
+            if not slot.is_active or slot.current_bookings >= slot.max_bookings:
+                contact_setting = ContactSettings.objects.first()
+                support_phone = contact_setting.support_phone if contact_setting and contact_setting.support_phone else "Support"
+                raise serializers.ValidationError({
+                    "error": "this delivery/installation slot is already booked for your area. Please select another available time slot or contact customer support contact",
+                    "support_message": f"For assistance or urgent bookings, please contact Customer Support {support_phone}"
+                })
 
         product_instance = None
         combo_instance = None
@@ -82,6 +119,10 @@ class CreateOrderSerializer(serializers.ModelSerializer):
         validated_data['grand_total'] = grand_total
 
         order = super().create(validated_data)
+        
+        if slot:
+            slot.current_bookings += 1
+            slot.save()
 
         # Commission Calculations
         commission_rate = Decimal('7.00')
@@ -118,6 +159,16 @@ class CreateOrderSerializer(serializers.ModelSerializer):
         
         return order
 
+class OrderTrackingSerializer(serializers.ModelSerializer):
+    updated_by_name = serializers.ReadOnlyField(source='updated_by.get_full_name')
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = OrderTracking
+        fields = ['id', 'status', 'status_display', 'updated_by_name', 'notes', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     user_email = serializers.ReadOnlyField(source='user.email')
@@ -125,6 +176,7 @@ class OrderSerializer(serializers.ModelSerializer):
     delivery_person_name = serializers.SerializerMethodField()
     payment_method = serializers.ReadOnlyField(source='payment.method')
     payment_status = serializers.SerializerMethodField()
+    tracking_history = OrderTrackingSerializer(many=True, read_only=True)
 
     def get_customer_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
@@ -141,7 +193,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'payment_method', 'payment_status', 'status', 'subtotal', 'tax', 'discount', 
             'shipping_fee', 'grand_total', 'is_refunded', 'refunded_at', 
             'delivery_person', 'shipping_address', 'billing_address', 'created_at',
-            'delivery_date', 'delivery_time'
+            'delivery_date', 'delivery_time', 'tracking_history'
         ]
         read_only_fields = [
             'user', 'status', 'subtotal', 'tax', 'discount', 
@@ -163,14 +215,7 @@ class OrderSerializer(serializers.ModelSerializer):
             
         return "Not Assigned"
 
-class OrderTrackingSerializer(serializers.ModelSerializer):
-    updated_by_name = serializers.ReadOnlyField(source='updated_by.get_full_name')
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
 
-    class Meta:
-        model = OrderTracking
-        fields = ['id', 'status', 'status_display', 'updated_by_name', 'notes', 'created_at']
-        read_only_fields = ['id', 'created_at']
 
 class OrderDeliverySerializer(serializers.ModelSerializer):
     """
@@ -180,6 +225,7 @@ class OrderDeliverySerializer(serializers.ModelSerializer):
     customer_name = serializers.SerializerMethodField()
     customer_phone = serializers.ReadOnlyField(source='user.phone_number')
     tracking_history = OrderTrackingSerializer(many=True, read_only=True)
+    delivery_otp = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -188,12 +234,26 @@ class OrderDeliverySerializer(serializers.ModelSerializer):
             'customer_phone', 'shipping_address', 
             'delivery_date', 'delivery_time',
             'before_image', 'after_image', 'grand_total',
-            'tracking_history'
+            'tracking_history', 'delivery_otp'
         ]
         read_only_fields = ['id', 'items', 'customer_name', 'customer_phone', 'shipping_address']
 
     def get_customer_name(self, obj):
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
+
+    def get_delivery_otp(self, obj):
+        from otp_service.models import OTPRecord
+        if not obj.user or not obj.user.phone_number:
+            return None
+        otp_rec = OTPRecord.objects.filter(
+            phone_number=obj.user.phone_number,
+            purpose=OTPRecord.Purpose.DELIVERY,
+            is_verified=False
+        ).order_by('-created_at').first()
+        
+        if otp_rec and not otp_rec.is_expired:
+            return otp_rec.otp_code
+        return None
 
 # --- Specialized Serializers for Full Detail View ---
 

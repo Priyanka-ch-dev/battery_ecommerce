@@ -2,14 +2,21 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
-from .models import Order, OrderTracking
-from .serializers import OrderSerializer, OrderDeliverySerializer, OrderTrackingSerializer, CreateOrderSerializer, OrderFullDetailSerializer
+from .models import Order, OrderTracking, DeliverySlot
+from .serializers import OrderSerializer, OrderDeliverySerializer, OrderTrackingSerializer, CreateOrderSerializer, OrderFullDetailSerializer, DeliverySlotSerializer
 from core.permissions import IsAdminUser, IsDeliveryPerson, IsCustomer, IsAdminOrDeliveryPerson
 from decimal import Decimal
 from products.models import Product
 from .models import OrderItem
 from sellers.models import SellerWallet, WalletTransaction
 from payments.models import Payment
+
+class DeliverySlotViewSet(viewsets.ModelViewSet):
+    queryset = DeliverySlot.objects.all()
+    serializer_class = DeliverySlotSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    filterset_fields = ['pincode', 'date', 'is_active']
+    search_fields = ['pincode', 'time_slot']
 
 class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -235,6 +242,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         new_status = request.data.get('status')
         notes = request.data.get('notes', '')
+        dummy_otp = None
         
         # Role-based status restrictions for Sellers
         if self.request.user.role == 'SELLER':
@@ -285,6 +293,14 @@ class OrderViewSet(viewsets.ModelViewSet):
                     return Response({
                         'error': 'Before and After installation photos are required to complete the installation.'
                     }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                # Generate OTP on Completion
+                from otp_service.utils import OTPManager
+                customer_phone = order.user.phone_number
+                if not customer_phone:
+                    return Response({'error': 'Customer has no phone number on file to receive the Delivery OTP.'}, status=status.HTTP_400_BAD_REQUEST)
+                record = OTPManager.generate_dummy_otp(customer_phone, 'DELIVERY')
+                dummy_otp = record.otp_code
         
         # Check if status is valid
         if new_status not in [choice[0] for choice in Order.Status.choices]:
@@ -306,8 +322,52 @@ class OrderViewSet(viewsets.ModelViewSet):
         payout_statuses = [Order.Status.DELIVERED, Order.Status.COMPLETED, Order.Status.VERIFIED, Order.Status.CLOSED]
         if new_status in payout_statuses and old_status not in payout_statuses:
             self.process_seller_earnings(order)
+            
+        response_data = {'status': f'Order status updated to {new_status}'}
+        if dummy_otp:
+            response_data['dummy_otp'] = dummy_otp
         
-        return Response({'status': f'Order status updated to {new_status}'})
+        return Response(response_data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminOrDeliveryPerson])
+    def verify_delivery_otp(self, request, pk=None):
+        order = self.get_object()
+        otp_code = request.data.get('otp_code')
+        
+        if not otp_code:
+            return Response({'error': 'OTP code is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        if order.status != Order.Status.COMPLETED:
+            return Response({'error': 'Order must be in COMPLETED state to verify delivery.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        customer_phone = order.user.phone_number
+        from otp_service.utils import OTPManager
+        is_valid, msg = OTPManager.verify_otp(customer_phone, otp_code, 'DELIVERY')
+        
+        if not is_valid:
+            return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
+            
+        old_status = order.status
+        order.status = Order.Status.CLOSED
+        order.save()
+        
+        # Record tracking entry
+        OrderTracking.objects.create(
+            order=order,
+            status=Order.Status.CLOSED,
+            updated_by=request.user,
+            notes="Order Delivery verified via OTP successfully."
+        )
+        
+        # Admin Notification simulation via print/log
+        print("*" * 50)
+        print(f"ADMIN NOTIFICATION: Order #{order.id} has been successfully verified and closed via OTP.")
+        print("*" * 50)
+
+        # Trigger wallet credit
+        self.process_seller_earnings(order)
+        
+        return Response({'status': 'Delivery verified and order closed successfully.'})
     
     @action(detail=False, methods=['get'])
     def stats(self, request):
