@@ -153,5 +153,48 @@ class ServiceAvailabilityView(APIView):
             serializer.save()
             return Response(serializer.data, status=201)
         return Response(serializer.errors, status=400)
-    
-    
+
+from otp_service.utils import OTPManager
+
+class VerifyRegistrationView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        phone_number = request.data.get('phone_number')
+        otp_code = request.data.get('otp_code')
+
+        if not phone_number or not otp_code:
+            return Response({"error": "Phone number and OTP code are required."}, status=400)
+
+        is_valid, msg = OTPManager.verify_otp(phone_number, otp_code, 'REGISTER')
+        if is_valid:
+            try:
+                user = User.objects.get(phone_number=phone_number)
+                user.is_active = True
+                user.save()
+                return Response({"message": "Registration verified successfully. Account is now active."}, status=200)
+            except User.DoesNotExist:
+                return Response({"error": "User not found."}, status=404)
+        return Response({"error": msg}, status=400)
+
+class ResetPasswordView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        phone_number = request.data.get('phone_number')
+        otp_code = request.data.get('otp_code')
+        new_password = request.data.get('new_password')
+
+        if not all([phone_number, otp_code, new_password]):
+            return Response({"error": "Phone number, OTP code, and new password are required."}, status=400)
+
+        is_valid, msg = OTPManager.verify_otp(phone_number, otp_code, 'PASSWORD_RESET')
+        if is_valid:
+            try:
+                user = User.objects.get(phone_number=phone_number)
+                user.set_password(new_password)
+                user.save()
+                return Response({"message": "Password reset successfully."}, status=200)
+            except User.DoesNotExist:
+                return Response({"error": "User not found."}, status=404)
+        return Response({"error": msg}, status=400)

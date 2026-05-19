@@ -136,7 +136,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 
             required_seller_fields = seller_fields.copy()
             required_seller_fields.remove('business_name')
-            required_seller_fields.append('phone_number')
+            # phone_number is handled globally
 
             missing_fields = [field for field in required_seller_fields if not data.get(field)]
             if missing_fields:
@@ -146,6 +146,10 @@ class RegisterSerializer(serializers.ModelSerializer):
             # Customer role: Only basic fields are accepted.
             for field in seller_fields:
                 data.pop(field, None)
+                
+        # Enforce phone number for all users
+        if not data.get('phone_number'):
+            raise serializers.ValidationError({'phone_number': "Phone number is required for OTP verification."})
                 
         return data
 
@@ -165,10 +169,11 @@ class RegisterSerializer(serializers.ModelSerializer):
             email=validated_data['email'],
             password=validated_data['password'],
             role=validated_data.get('role', User.Role.CUSTOMER),
-            phone_number=validated_data.get('phone_number', ''),
+            phone_number=validated_data.get('phone_number'),
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
-            business_name=business_name
+            business_name=business_name,
+            is_active=True  # Phone number verified during registration
         )
 
         if user.role == User.Role.SELLER:
