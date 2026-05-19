@@ -44,6 +44,8 @@ urlpatterns = [
     path('api/contact/', include('contact.urls')),
     path('api/locations/', include('users.location_urls')),
     path('api/',include('invoices.urls')),
+    path('api/', include('leads.urls')),
+    path('api/otp/', include('otp_service.urls')),
     path('api/', include(router.urls)), # Moved to bottom to prevent catch-all conflicts
 ]
 

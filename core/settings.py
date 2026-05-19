@@ -51,6 +51,8 @@ INSTALLED_APPS = [
     'reports.apps.ReportsConfig',
     'contact',
     'invoices',
+    'leads.apps.LeadsConfig',
+    'otp_service.apps.OtpServiceConfig',
 ]
 
 AUTH_USER_MODEL = 'users.User'
