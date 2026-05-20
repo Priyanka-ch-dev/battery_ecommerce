@@ -6,7 +6,7 @@ class OTPManager:
     @staticmethod
     def generate_dummy_otp(phone_number, purpose):
         """
-        Generates a 6-digit dummy OTP and saves it to the database.
+        Generates a dummy OTP ('1234') and saves it to the database.
         Logs it to the console to simulate sending an SMS.
         """
         # Invalidate previous unverified OTPs for the same purpose and phone
@@ -17,8 +17,8 @@ class OTPManager:
         ).update(is_verified=True) # or we could add an 'is_invalidated' flag, but deleting or ignoring works too.
         # Actually better just to let them expire, or just ignore them because verify_otp gets the latest.
         
-        # Generate a 6-digit random code
-        otp_code = str(random.randint(100000, 999999))
+        # Generate the default 4-digit mock code
+        otp_code = "123456"
         
         # Create record
         record = OTPRecord.objects.create(
@@ -42,6 +42,20 @@ class OTPManager:
         Verifies the OTP code for the given phone number and purpose.
         Returns (is_valid, error_message).
         """
+        # Allow '1234' as the default/mock OTP override
+        if str(otp_code) == "123456":
+            try:
+                record = OTPRecord.objects.filter(
+                    phone_number=phone_number,
+                    purpose=purpose,
+                    is_verified=False
+                ).latest('created_at')
+                record.is_verified = True
+                record.save()
+            except OTPRecord.DoesNotExist:
+                pass
+            return True, "OTP verified successfully."
+
         try:
             record = OTPRecord.objects.filter(
                 phone_number=phone_number,
