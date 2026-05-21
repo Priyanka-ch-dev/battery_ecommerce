@@ -18,7 +18,7 @@ class SellerProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = SellerProfile
         fields = [
-            "id", "user", "name", "seller_name", "email", "phone", "role", "business_name", "status", 
+            "id", "user", "name", "seller_name", "email", "phone", "role", "business_name", "status", "has_been_approved",
             "commission", "commission_amt", "gst", "gst_number", "pan_number", "aadhaar_number", 
             "shop_license_number",
 
@@ -26,7 +26,50 @@ class SellerProfileSerializer(serializers.ModelSerializer):
             "bank_account_name", "bank_account_number", "bank_ifsc", "bank_name", "bank_account_type", "bank_passbook_copy",
             "shop_image", "owner_image"
         ]
-        read_only_fields = ['user', 'status', 'is_approved']
+        read_only_fields = ['user', 'status', 'is_approved', 'has_been_approved']
+
+    def update(self, instance, validated_data):
+        # Check if the request is made by a seller user who was previously approved
+        request = self.context.get('request')
+        is_seller = request and request.user and getattr(request.user, 'role', '') == 'SELLER'
+        
+        was_approved = instance.status == SellerProfile.Status.APPROVED
+        
+        # List of important fields to check
+        important_fields = [
+            'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
+            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'authorized_letter',
+            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_account_type',
+            'bank_passbook_copy', 'business_address', 'shop_image', 'owner_image'
+        ]
+        
+        has_changed = False
+        for field in important_fields:
+            if field in validated_data:
+                new_val = validated_data[field]
+                old_val = getattr(instance, field)
+                
+                # Check for file updates
+                if field in ['pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'authorized_letter', 'bank_passbook_copy', 'shop_image', 'owner_image']:
+                    from django.core.files import File as DjangoFile
+                    if isinstance(new_val, DjangoFile):
+                        has_changed = True
+                        break
+                else:
+                    # Clean strings before comparison
+                    if isinstance(new_val, str) and isinstance(old_val, str):
+                        if new_val.strip() != old_val.strip():
+                            has_changed = True
+                            break
+                    elif new_val != old_val:
+                        has_changed = True
+                        break
+        
+        # If it is updated by the seller, they were approved, and an important field has changed:
+        if is_seller and was_approved and has_changed:
+            instance.status = SellerProfile.Status.PENDING
+            
+        return super().update(instance, validated_data)
 
 
 class WalletTransactionSerializer(serializers.ModelSerializer):

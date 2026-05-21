@@ -44,12 +44,15 @@ class SellerProfile(models.Model):
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     is_approved = models.BooleanField(default=False)
+    has_been_approved = models.BooleanField(default=False)
     commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Percentage commission, e.g., 5.00 for 5%")
     commission_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Direct commission amount per sale")
     
     def save(self, *args, **kwargs):
         # Sync is_approved with status
         self.is_approved = self.status == self.Status.APPROVED
+        if self.status == self.Status.APPROVED:
+            self.has_been_approved = True
         super().save(*args, **kwargs)
 
     def __str__(self):
