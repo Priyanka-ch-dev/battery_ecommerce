@@ -26,6 +26,11 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
         if getattr(user, 'role', '') == 'ADMIN' or getattr(user, 'is_superuser', False):
             return Invoice.objects.all()
         elif getattr(user, 'role', '') == 'SELLER':
+            try:
+                if not user.seller_profile.is_approved:
+                    return Invoice.objects.none()
+            except AttributeError:
+                return Invoice.objects.none()
             return Invoice.objects.filter(seller__user=user)
         else:
             # Assume CUSTOMER
