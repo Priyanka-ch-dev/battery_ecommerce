@@ -78,8 +78,9 @@ class CreateOrderSerializer(serializers.ModelSerializer):
                 contact_setting = ContactSettings.objects.first()
                 support_phone = contact_setting.support_phone if contact_setting and contact_setting.support_phone else "Support"
                 raise serializers.ValidationError({
-                    "error": "this delivery/installation slot is already booked for your area. Please select another available time slot or contact customer support contact",
-                    "support_message": f"For assistance or urgent bookings, please contact Customer Support {support_phone}"
+                    "error": "This delivery/installation slot is already booked for your area. Please select another available time slot or contact Customer Support.",
+                    "support_message": "For assistance or urgent bookings, please contact Customer Support.",
+                    "support_phone": support_phone
                 })
 
         product_instance = None

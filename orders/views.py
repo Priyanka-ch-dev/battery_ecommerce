@@ -18,6 +18,50 @@ class DeliverySlotViewSet(viewsets.ModelViewSet):
     filterset_fields = ['pincode', 'date', 'is_active']
     search_fields = ['pincode', 'time_slot']
 
+    def get_permissions(self):
+        if self.action == 'check_availability':
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticated(), IsAdminUser()]
+
+    @action(detail=False, methods=['post'], url_path='check-availability')
+    def check_availability(self, request):
+        pincode = request.data.get('pincode')
+        date = request.data.get('date')
+        time_slot = request.data.get('time_slot')
+
+        if not pincode or not date or not time_slot:
+            return Response(
+                {"error": "Pincode, date, and time_slot are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from contact.models import ContactSettings
+        contact_setting = ContactSettings.objects.first()
+        support_phone = contact_setting.support_phone if contact_setting and contact_setting.support_phone else "Support"
+
+        # Check if the slot exists and validate availability
+        slot = DeliverySlot.objects.filter(
+            pincode=pincode,
+            date=date,
+            time_slot=time_slot
+        ).first()
+
+        if slot:
+            if not slot.is_active or slot.current_bookings >= slot.max_bookings:
+                return Response({
+                    "available": False,
+                    "error": "This delivery/installation slot is already booked for your area. Please select another available time slot or contact Customer Support.",
+                    "support_message": "For assistance or urgent bookings, please contact Customer Support.",
+                    "support_phone": support_phone
+                }, status=status.HTTP_200_OK)
+
+        return Response({
+            "available": True,
+            "message": "Slot is available.",
+            "support_phone": support_phone
+        }, status=status.HTTP_200_OK)
+
+
 class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['user', 'status', 'delivery_date', 'delivery_person', 'items__seller']

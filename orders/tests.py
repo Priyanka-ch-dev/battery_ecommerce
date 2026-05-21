@@ -110,8 +110,10 @@ class DeliverySlotValidationTests(APITestCase):
         self.assertEqual(response2.status_code, status.HTTP_400_BAD_REQUEST)
         error_msg = response2.data['error'][0] if isinstance(response2.data['error'], list) else response2.data['error']
         support_msg = response2.data['support_message'][0] if isinstance(response2.data['support_message'], list) else response2.data['support_message']
-        self.assertIn("this delivery/installation slot is already booked for your area", error_msg)
-        self.assertIn("1800-999-8888", support_msg)
+        support_phone = response2.data['support_phone'][0] if isinstance(response2.data['support_phone'], list) else response2.data['support_phone']
+        self.assertIn("This delivery/installation slot is already booked for your area", error_msg)
+        self.assertIn("For assistance or urgent bookings, please contact Customer Support.", support_msg)
+        self.assertEqual("1800-999-8888", support_phone)
 
     def test_inactive_slot_booking_prevention(self):
         slot_date = datetime.date.today() + datetime.timedelta(days=1)
@@ -171,6 +173,63 @@ class DeliverySlotValidationTests(APITestCase):
 
         slot.refresh_from_db()
         self.assertEqual(slot.current_bookings, 0)
+
+    def test_check_availability_endpoint_unauthenticated(self):
+        payload = {
+            "pincode": "560099",
+            "date": str(datetime.date.today() + datetime.timedelta(days=2)),
+            "time_slot": "02:00 PM - 04:00 PM"
+        }
+        self.client.force_authenticate(user=None)
+        response = self.client.post("/api/orders/delivery-slots/check-availability/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_check_availability_endpoint_available(self):
+        # By default, a non-existent slot is available
+        payload = {
+            "pincode": "560099",
+            "date": str(datetime.date.today() + datetime.timedelta(days=2)),
+            "time_slot": "02:00 PM - 04:00 PM"
+        }
+        # Authenticated customer user should be able to call this check endpoint
+        self.client.force_authenticate(user=self.customer)
+        response = self.client.post("/api/orders/delivery-slots/check-availability/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["available"])
+
+    def test_check_availability_endpoint_unavailable_when_booked(self):
+        slot_date = datetime.date.today() + datetime.timedelta(days=1)
+        slot_time = "10:00 AM - 12:00 PM"
+        pincode = "560005"
+
+        slot = DeliverySlot.objects.create(
+            date=slot_date,
+            time_slot=slot_time,
+            pincode=pincode,
+            max_bookings=1,
+            current_bookings=1
+        )
+
+        payload = {
+            "pincode": pincode,
+            "date": str(slot_date),
+            "time_slot": slot_time
+        }
+        
+        response = self.client.post("/api/orders/delivery-slots/check-availability/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["available"])
+        self.assertEqual(response.data["error"], "This delivery/installation slot is already booked for your area. Please select another available time slot or contact Customer Support.")
+        self.assertEqual(response.data["support_message"], "For assistance or urgent bookings, please contact Customer Support.")
+        self.assertEqual(response.data["support_phone"], self.contact_settings.support_phone)
+
+    def test_check_availability_endpoint_invalid_payload(self):
+        payload = {
+            "pincode": "560005",
+            # Missing date and time_slot
+        }
+        response = self.client.post("/api/orders/delivery-slots/check-availability/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_delivery_otp_workflow(self):
         # Authenticate as seller_user
