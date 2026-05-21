@@ -295,21 +295,15 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             try:
                 status = self.user.seller_profile.status
                 is_approved = self.user.seller_profile.is_approved
+                has_been_approved = self.user.seller_profile.has_been_approved
             except AttributeError:
                 status = 'PENDING'
                 is_approved = False
-
-            if status != 'APPROVED':
-                from rest_framework.exceptions import AuthenticationFailed
-                if status == 'PENDING':
-                    raise AuthenticationFailed("Your seller account is currently under admin review. Access to the Seller Dashboard will be enabled once your account has been approved.")
-                elif status == 'REJECTED':
-                    raise AuthenticationFailed("Your seller account has been rejected by the administrator.")
-                else:
-                    raise AuthenticationFailed("Your seller account has not yet been approved by the administrator.")
+                has_been_approved = False
 
             user_data['is_approved'] = is_approved
             user_data['status'] = status
+            user_data['has_been_approved'] = has_been_approved
 
         data['user'] = user_data
         return data
