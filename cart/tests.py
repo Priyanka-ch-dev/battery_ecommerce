@@ -124,5 +124,6 @@ class CartCheckoutSlotValidationTests(APITestCase):
         }
         response = self.client.post(f"/api/cart/carts/{self.cart.id}/checkout/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("this delivery/installation slot is already booked for your area", response.data['error'])
-        self.assertIn("1800-999-7777", response.data['support_message'])
+        self.assertIn("This delivery/installation slot is already booked for your area", response.data['error'])
+        self.assertEqual("1800-999-7777", response.data['support_phone'])
+        self.assertEqual("For assistance or urgent bookings, please contact Customer Support.", response.data['support_message'])
