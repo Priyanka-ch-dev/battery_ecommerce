@@ -10,17 +10,28 @@ class DeliverySlotSerializer(serializers.ModelSerializer):
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product_detail = ProductSerializer(source='product', read_only=True)
+    combo_product_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'product', 'product_detail', 'quantity', 'price', 'is_exchange', 'exchange_discount', 'total_amount', 'commission_percentage', 'admin_commission_amount', 'seller_earning']
+        fields = [
+            'id', 'product', 'product_detail', 'combo_product', 'combo_product_detail',
+            'quantity', 'price', 'is_exchange', 'exchange_discount',
+            'total_amount', 'commission_percentage', 'admin_commission_amount', 'seller_earning'
+        ]
         read_only_fields = ['order', 'exchange_discount']
+
+    def get_combo_product_detail(self, obj):
+        if obj.combo_product:
+            from products.serializers import ComboProductSerializer
+            return ComboProductSerializer(obj.combo_product, context=self.context).data
+        return None
 
     def validate(self, data):
         product = data.get('product')
         quantity = data.get('quantity', 1)
         if product and product.stock < quantity:
-            raise serializers.ValidationError({"quantity": f"Only {product.stock} items left in stock for {product.name}."})
+            raise serializers.ValidationError({"message": f"{product.name} is not available."})
         return data
 
 class CreateOrderSerializer(serializers.ModelSerializer):
@@ -218,6 +229,14 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 
+class OrderPaymentStatusSerializer(serializers.ModelSerializer):
+    method_display = serializers.CharField(source='get_method_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = Payment
+        fields = ['method', 'method_display', 'status', 'status_display', 'transaction_id', 'razorpay_order_id', 'razorpay_payment_id']
+
 class OrderDeliverySerializer(serializers.ModelSerializer):
     """
     Serializer for delivery personnel (Sellers) with limited customer data.
@@ -227,6 +246,7 @@ class OrderDeliverySerializer(serializers.ModelSerializer):
     customer_phone = serializers.ReadOnlyField(source='user.phone_number')
     tracking_history = OrderTrackingSerializer(many=True, read_only=True)
     delivery_otp = serializers.SerializerMethodField()
+    payment_details = OrderPaymentStatusSerializer(source='payment', read_only=True)
 
     class Meta:
         model = Order
@@ -235,7 +255,7 @@ class OrderDeliverySerializer(serializers.ModelSerializer):
             'customer_phone', 'shipping_address', 
             'delivery_date', 'delivery_time',
             'before_image', 'after_image', 'grand_total',
-            'tracking_history', 'delivery_otp'
+            'tracking_history', 'delivery_otp', 'payment_details'
         ]
         read_only_fields = ['id', 'items', 'customer_name', 'customer_phone', 'shipping_address']
 
@@ -257,14 +277,6 @@ class OrderDeliverySerializer(serializers.ModelSerializer):
         return None
 
 # --- Specialized Serializers for Full Detail View ---
-
-class OrderPaymentStatusSerializer(serializers.ModelSerializer):
-    method_display = serializers.CharField(source='get_method_display', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
-
-    class Meta:
-        model = Payment
-        fields = ['method', 'method_display', 'status', 'status_display', 'transaction_id', 'razorpay_order_id', 'razorpay_payment_id']
 
 class OrderCustomerDetailSerializer(serializers.ModelSerializer):
     class Meta:
@@ -290,8 +302,17 @@ class OrderItemFullSerializer(serializers.ModelSerializer):
 
     def get_product_image(self, obj):
         request = self.context.get('request')
-        if obj.combo_product and obj.combo_product.image:
-            return request.build_absolute_uri(obj.combo_product.image.url) if request else obj.combo_product.image.url
+        if obj.combo_product:
+            # First try images related set for absolute URL
+            primary_img = obj.combo_product.images.filter(is_primary=True).first()
+            if not primary_img:
+                primary_img = obj.combo_product.images.first()
+            if primary_img and primary_img.image:
+                return request.build_absolute_uri(primary_img.image.url) if request else primary_img.image.url
+            # Fallback to model image field
+            if obj.combo_product.image:
+                return request.build_absolute_uri(obj.combo_product.image.url) if request else obj.combo_product.image.url
+            return None
         if obj.product:
             primary_img = obj.product.images.filter(is_primary=True).first()
             if not primary_img:
@@ -317,6 +338,8 @@ class OrderFullDetailSerializer(serializers.ModelSerializer):
     customer_payment_status = serializers.SerializerMethodField()
     delivery_payment_status = serializers.SerializerMethodField()
     delivery_person_name = serializers.SerializerMethodField()
+    before_image = serializers.SerializerMethodField()
+    after_image = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -326,7 +349,7 @@ class OrderFullDetailSerializer(serializers.ModelSerializer):
             'shipping_fee', 'grand_total', 'payment_details', 'tracking_history',
             'delivery_person', 'delivery_date', 'delivery_time', 'seller_earnings',
             'customer_payment_status', 'delivery_payment_status', 'is_exchange',
-            'delivery_person_name', 'created_at'
+            'delivery_person_name', 'created_at','before_image','after_image'
         ]
 
     def get_delivery_person_name(self, obj):
@@ -397,4 +420,14 @@ class OrderFullDetailSerializer(serializers.ModelSerializer):
             results.append(data)
             
         return results
+    def get_before_image(self, obj):
+        request = self.context.get('request')
+        if obj.before_image:
+            return request.build_absolute_uri(obj.before_image.url)
+        return None
 
+    def get_after_image(self, obj):
+        request = self.context.get('request')
+        if obj.after_image:
+            return request.build_absolute_uri(obj.after_image.url)
+        return None

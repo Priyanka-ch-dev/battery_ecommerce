@@ -6,13 +6,24 @@ from decimal import Decimal
 
 @receiver(post_save, sender=OrderItem)
 def reduce_product_stock(sender, instance, created, **kwargs):
-    if created and instance.product:
+    if created:
         with transaction.atomic():
             from products.models import Product
-            product = Product.objects.select_for_update().get(id=instance.product.id)
-            if product.stock >= instance.quantity:
-                product.stock -= instance.quantity
-                product.save()
+            if instance.product:
+                product = Product.objects.select_for_update().get(id=instance.product.id)
+                if product.stock >= instance.quantity:
+                    product.stock -= instance.quantity
+                    product.save()
+            elif instance.combo_product:
+                # Deduct from both inverter and battery components
+                inverter = Product.objects.select_for_update().get(id=instance.combo_product.inverter.id)
+                battery = Product.objects.select_for_update().get(id=instance.combo_product.battery.id)
+                if inverter.stock >= instance.quantity:
+                    inverter.stock -= instance.quantity
+                    inverter.save()
+                if battery.stock >= instance.quantity:
+                    battery.stock -= instance.quantity
+                    battery.save()
 
 @receiver(post_save, sender=Order)
 def process_seller_commission(sender, instance, **kwargs):
@@ -28,7 +39,7 @@ def process_seller_commission(sender, instance, **kwargs):
                 return
                 
             for item in instance.items.all():
-                if item.product and item.seller:
+                if (item.product or item.combo_product) and item.seller:
                     seller_earnings = item.seller_earning
                     
                     wallet, _ = SellerWallet.objects.get_or_create(seller=item.seller)

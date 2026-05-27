@@ -227,28 +227,46 @@ class OrderViewSet(viewsets.ModelViewSet):
             wallet.pending_balance += amount
             wallet.save()
 
-    @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser])
+    @action(detail=True, methods=['patch'], permission_classes=[IsAdminOrDeliveryPerson])
     def update_payment_status(self, request, pk=None):
         order = self.get_object()
         if not hasattr(order, 'payment'):
             return Response({'error': 'No payment record found'}, status=status.HTTP_400_BAD_REQUEST)
         
         payment = order.payment
-        update_type = request.data.get('update_type') # 'customer' or 'delivery'
+        update_type = request.data.get('update_type')  # 'customer' or 'delivery'
         new_val = request.data.get('status')
-        
-        if update_type == 'customer':
-            payment.customer_payment_status = new_val
-            payment.status = new_val # Sync legacy
-        elif update_type == 'delivery':
-            payment.delivery_payment_status = new_val
+        user = request.user
+
+        is_admin = getattr(user, 'role', None) == 'ADMIN' or getattr(user, 'is_staff', False)
+
+        if is_admin:
+            # Admins can update any payment status field
+            if update_type == 'customer':
+                payment.customer_payment_status = new_val
+                payment.status = new_val  # Sync legacy
+            elif update_type == 'delivery':
+                payment.delivery_payment_status = new_val
+            else:
+                # Backward compatibility
+                payment.status = new_val
+                payment.customer_payment_status = new_val
         else:
-            # Backward compatibility
-            payment.status = new_val 
-            payment.customer_payment_status = new_val
-            
+            # Sellers can only update the delivery_payment_status (cash collection confirmation)
+            # and mark customer payment as COLLECTED for COD orders
+            if payment.method == 'COD' and new_val in ['COLLECTED', 'PENDING']:
+                payment.customer_payment_status = new_val
+                payment.status = new_val
+            elif update_type == 'delivery' and new_val in ['PENDING', 'SUBMITTED', 'VERIFIED']:
+                payment.delivery_payment_status = new_val
+            else:
+                return Response(
+                    {'error': 'Sellers can only mark COD payments as COLLECTED or update delivery status.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
         payment.save()
-        return Response({'status': 'Tracking updated successfully'})
+        return Response({'status': 'Payment status updated successfully'})
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
     def assign_seller(self, request, pk=None):

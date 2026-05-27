@@ -80,6 +80,8 @@ class OrderItem(models.Model):
     seller_earning = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     def __str__(self):
+        if self.combo_product:
+            return f"{self.quantity} of Combo: {self.combo_product.name}"
         return f"{self.quantity} of {self.product.name if self.product else 'Deleted Product'}"
 
 class OrderTracking(models.Model):
