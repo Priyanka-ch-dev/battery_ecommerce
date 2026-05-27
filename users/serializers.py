@@ -202,11 +202,26 @@ class AddressSerializer(serializers.ModelSerializer):
 class WishlistSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
+    product_image = serializers.SerializerMethodField()
 
     class Meta:
         model = Wishlist
-        fields = ['id', 'user', 'product', 'added_at', 'product_name', 'product_price']
+        fields = ['id', 'user', 'product', 'added_at', 'product_name', 'product_price', 'product_image']
         read_only_fields = ['user']
+
+    def get_product_image(self, obj):
+        if obj.product:
+            primary_image = obj.product.images.filter(is_primary=True).first()
+            if not primary_image:
+                primary_image = obj.product.images.first()
+            
+            if primary_image and primary_image.image:
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(primary_image.image.url)
+                return primary_image.image.url
+            return "https://via.placeholder.com/150"
+        return None
 
 class StateSerializer(serializers.ModelSerializer):
     class Meta:
