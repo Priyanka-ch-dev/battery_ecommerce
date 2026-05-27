@@ -127,32 +127,48 @@ class CartViewSet(viewsets.ModelViewSet):
         for item in items:
             if item.product:
                 product = locked_products[item.product.id]
-                product.stock -= item.quantity
-                product.save()
-                
                 price = product.special_price if product.special_price else product.price
+                
+                from decimal import Decimal as D
+                commission_rate = D('7.00')
+                if product.seller and product.seller.commission_rate > 0:
+                    commission_rate = product.seller.commission_rate
+                total_amount = price * item.quantity
+                admin_commission = (total_amount * commission_rate) / D('100.00')
+                seller_earning = total_amount - admin_commission
+
                 OrderItem.objects.create(
                     order=order,
                     product=product,
                     seller=product.seller,
                     price=price,
-                    quantity=item.quantity
+                    quantity=item.quantity,
+                    total_amount=total_amount,
+                    commission_percentage=commission_rate,
+                    admin_commission_amount=admin_commission,
+                    seller_earning=seller_earning
                 )
             elif item.combo_product:
-                # Deduct from both components
-                inv = locked_products[item.combo_product.inverter.id]
-                bat = locked_products[item.combo_product.battery.id]
-                inv.stock -= item.quantity
-                bat.stock -= item.quantity
-                inv.save()
-                bat.save()
-                
+                combo = item.combo_product
+                from decimal import Decimal as D
+                commission_rate = D('7.00')
+                seller = combo.inverter.seller
+                if seller and seller.commission_rate > 0:
+                    commission_rate = seller.commission_rate
+                total_amount = combo.price * item.quantity
+                admin_commission = (total_amount * commission_rate) / D('100.00')
+                seller_earning = total_amount - admin_commission
+
                 OrderItem.objects.create(
                     order=order,
-                    combo_product=item.combo_product,
-                    seller=item.combo_product.inverter.seller,
-                    price=item.combo_product.price,
-                    quantity=item.quantity
+                    combo_product=combo,
+                    seller=seller,
+                    price=combo.price,
+                    quantity=item.quantity,
+                    total_amount=total_amount,
+                    commission_percentage=commission_rate,
+                    admin_commission_amount=admin_commission,
+                    seller_earning=seller_earning
                 )
             
         # Clear Cart

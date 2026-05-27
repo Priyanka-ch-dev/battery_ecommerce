@@ -19,7 +19,7 @@ class CartItemSerializer(serializers.ModelSerializer):
     def get_combo_product_detail(self, obj):
         if obj.combo_product:
             from products.serializers import ComboProductSerializer
-            return ComboProductSerializer(obj.combo_product).data
+            return ComboProductSerializer(obj.combo_product, context=self.context).data
         return None
 
     def validate(self, data):
