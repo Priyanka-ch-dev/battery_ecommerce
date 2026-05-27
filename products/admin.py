@@ -35,8 +35,8 @@ class ProductAdmin(admin.ModelAdmin):
 
 @admin.register(ProductReview)
 class ProductReviewAdmin(admin.ModelAdmin):
-    list_display = ['product', 'user', 'rating', 'is_approved', 'created_at']
-    list_filter = ['is_approved', 'rating']
+    list_display = ['product', 'user', 'rating', 'status', 'is_approved', 'created_at']
+    list_filter = ['status', 'is_approved', 'rating']
 
 class VehicleModelInline(admin.TabularInline):
     model = VehicleModel

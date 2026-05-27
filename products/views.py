@@ -4,6 +4,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Value
+from django.db.models.functions import Least
 from .models import Category, Brand, Product, ProductReview, ProductImage, ProductSpecification, Make, VehicleModel, ComboProduct, ComboProductImage, ComboProductSpecification, Vehicle
 from .serializers import (
     CategorySerializer, BrandSerializer, ProductSerializer, 
@@ -79,7 +81,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         product_qs = self.filter_queryset(self.get_queryset())
         
         # Get filtered combos
-        combo_qs = ComboProduct.objects.all().prefetch_related(
+        combo_qs = ComboProduct.objects.prefetch_related(
             'category', 'brand', 'state', 'city', 'make', 'model', 'images', 'specifications'
         ).select_related('inverter', 'battery', 'seller')
         if not (request.user.is_authenticated and request.user.role in ['ADMIN', 'SELLER']):
@@ -157,7 +159,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             return vals and any(str(v).lower() not in ['null', 'undefined', 'none', ''] for v in vals)
 
         product_qs = self.get_queryset()
-        combo_qs = ComboProduct.objects.all().prefetch_related(
+        combo_qs = ComboProduct.objects.prefetch_related(
             'category', 'brand', 'state', 'city', 'make', 'model', 'images', 'specifications'
         ).select_related('inverter', 'battery', 'seller')
         if not (request.user.is_authenticated and request.user.role in ['ADMIN', 'SELLER']):
@@ -187,7 +189,13 @@ class ProductReviewViewSet(viewsets.ModelViewSet):
     serializer_class = ProductReviewSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['product', 'is_approved']
+    filterset_fields = ['product', 'is_approved', 'status']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_authenticated and getattr(user, 'role', None) == 'ADMIN':
+            return ProductReview.objects.all().order_by('-created_at')
+        return ProductReview.objects.filter(status=ProductReview.Status.APPROVED).order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -195,16 +203,16 @@ class ProductReviewViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
     def approve(self, request, pk=None):
         review = self.get_object()
-        review.is_approved = True
+        review.status = ProductReview.Status.APPROVED
         review.save()
-        return Response({'status': 'review approved', 'is_approved': True})
+        return Response({'status': 'review approved', 'is_approved': True, 'review_status': review.status})
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
     def reject(self, request, pk=None):
         review = self.get_object()
-        review.is_approved = False
+        review.status = ProductReview.Status.REJECTED
         review.save()
-        return Response({'status': 'review rejected', 'is_approved': False})
+        return Response({'status': 'review rejected', 'is_approved': False, 'review_status': review.status})
 
 class ComboProductViewSet(viewsets.ModelViewSet):
     queryset = ComboProduct.objects.all()

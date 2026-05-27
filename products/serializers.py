@@ -45,12 +45,12 @@ class ProductReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductReview
         fields = '__all__'
-        read_only_fields = ['user', 'is_approved']
+        read_only_fields = ['user', 'is_approved', 'status']
 
 class ProductSerializer(serializers.ModelSerializer):
     images = ProductImageSerializer(many=True, read_only=True)
     specifications = ProductSpecificationSerializer(many=True, read_only=True)
-    reviews = ProductReviewSerializer(many=True, read_only=True)
+    reviews = serializers.SerializerMethodField()
     compatible_vehicles_details = VehicleSerializer(source='compatible_vehicles', many=True, read_only=True)
 
     category_names = serializers.SerializerMethodField()
@@ -65,6 +65,11 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def get_product_type(self, obj):
         return 'single'
+
+    def get_reviews(self, obj):
+        # Only return approved reviews on the public product views
+        approved_reviews = obj.reviews.filter(status=obj.reviews.model.Status.APPROVED)
+        return ProductReviewSerializer(approved_reviews, many=True, context=self.context).data
 
     def get_category_names(self, obj):
         return [c.name for c in obj.category.all()]
@@ -135,12 +140,14 @@ class ProductSerializer(serializers.ModelSerializer):
 class ComboProductSpecificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ComboProductSpecification
-        fields = ['id', 'key', 'value']
+        fields = ['id', 'combo_product', 'key', 'value']
+        extra_kwargs = {'combo_product': {'required': False}}
 
 class ComboProductImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ComboProductImage
-        fields = ['id', 'image', 'is_primary']
+        fields = ['id', 'combo_product', 'image', 'is_primary']
+        extra_kwargs = {'combo_product': {'required': False}}
 
 class ComboProductSerializer(serializers.ModelSerializer):
     inverter_name = serializers.ReadOnlyField(source='inverter.name')
@@ -153,9 +160,36 @@ class ComboProductSerializer(serializers.ModelSerializer):
     category_names = serializers.SerializerMethodField()
     brand_names = serializers.SerializerMethodField()
     product_type = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
+    stock = serializers.SerializerMethodField()
 
     def get_product_type(self, obj):
         return 'combo'
+
+    def get_stock(self, obj):
+        """Return effective stock as min of component stocks."""
+        try:
+            return min(obj.inverter.stock, obj.battery.stock)
+        except Exception:
+            return 0
+
+    def get_image(self, obj):
+        """Return absolute URL of primary image, with fallback chain."""
+        request = self.context.get('request')
+        # 1. Try images related set (preferred source of truth)
+        primary_image = obj.images.filter(is_primary=True).first()
+        if not primary_image:
+            primary_image = obj.images.first()
+        if primary_image and primary_image.image:
+            if request:
+                return request.build_absolute_uri(primary_image.image.url)
+            return primary_image.image.url
+        # 2. Fallback to the model's direct image field
+        if obj.image:
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
 
     def get_category_names(self, obj):
         return [c.name for c in obj.category.all()]
@@ -185,14 +219,15 @@ class ComboProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = ComboProduct
         fields = [
-            'id', 'name', 'slug', 'sku', 'price', 'special_price', 'description', 'image', 'inverter', 'battery', 
-            'inverter_name', 'battery_name', 'warranty', 'is_active', 'created_at', 'view_count',
+            'id', 'name', 'slug', 'sku', 'price', 'special_price', 'description', 'image', 'inverter', 'battery',
+            'inverter_name', 'battery_name', 'warranty', 'is_active', 'created_at', 'view_count', 'stock',
             'category', 'category_names', 'brand', 'brand_names',
-            'state', 'state_names', 'city', 'city_names', 'pincodes', 'pincode_names', 'make', 'make_names', 
+            'state', 'state_names', 'city', 'city_names', 'pincodes', 'pincode_names', 'make', 'make_names',
             'model', 'model_names', 'compatible_vehicles', 'compatible_vehicles_details',
             'exchange_available', 'exchange_discount',
             'specifications', 'images', 'product_type'
         ]
+        read_only_fields = ['stock']
 
     def validate(self, data):
         inverter = data.get('inverter')

@@ -103,15 +103,25 @@ class ProductSpecification(models.Model):
         return f"{self.product.name} - {self.key}: {self.value}"
 
 class ProductReview(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending Approval'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='reviews')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reviews')
     rating = models.PositiveIntegerField(choices=[(i, str(i)) for i in range(1, 6)])
     comment = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     is_approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def save(self, *args, **kwargs):
+        self.is_approved = self.status == self.Status.APPROVED
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"Review by {self.user.email} for {self.product.name} ({'Approved' if self.is_approved else 'Pending'})"
+        return f"Review by {self.user.email} for {self.product.name} ({self.status})"
 
 class ComboProduct(models.Model):
     name = models.CharField(max_length=255)
