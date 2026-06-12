@@ -115,6 +115,25 @@ class ReportsViewSet(viewsets.ModelViewSet):
 
             # 4. Most Viewed (Recharts)
             most_viewed = Product.objects.filter(is_active=True).values('name', 'view_count').order_by('-view_count')[:7]
+            # 4. Most Viewed (Products + Combos)
+
+            from products.models import ComboProduct
+
+            products = list(
+                        Product.objects.filter(is_active=True)
+                        .values('name', 'view_count')
+                    )
+
+            combos = list(
+                        ComboProduct.objects.filter(is_active=True)
+                        .values('name', 'view_count')
+                    )
+
+            most_viewed = sorted(
+                        products + combos,
+                        key=lambda x: x['view_count'],
+                        reverse=True
+                    )[:7] 
 
             # 5. New Customers Growth (Recharts)
             time_filter = request.query_params.get('filter', 'week')
