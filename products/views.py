@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Value
+from django.db.models import Value,F
 from django.db.models.functions import Least
 from .models import Category, Brand, Product, ProductReview, ProductImage, ProductSpecification, Make, VehicleModel, ComboProduct, ComboProductImage, ComboProductSpecification, Vehicle
 from .serializers import (
@@ -14,6 +14,7 @@ from .serializers import (
     UnifiedProductSerializer
 )
 from core.permissions import IsAdminOrReadOnly, IsAdminUser, IsApprovedSeller
+
 
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
@@ -118,12 +119,25 @@ class ProductViewSet(viewsets.ModelViewSet):
         # Try Product
         product = Product.objects.filter(pk=pk).first()
         if product:
+              # Increase view count
+            product.view_count = F('view_count') + 1
+            product.save(update_fields=['view_count'])
+
+            # Refresh object from DB
+            product.refresh_from_db()
             serializer = ProductSerializer(product, context={'request': request})
             return Response(serializer.data)
         
         # Try ComboProduct
         combo = ComboProduct.objects.filter(pk=pk).first()
         if combo:
+            # Increase view count
+            combo.view_count = F('view_count') + 1
+            combo.save(update_fields=['view_count'])
+
+            # Reload latest value
+            combo.refresh_from_db()
+            
             serializer = ComboProductSerializer(combo, context={'request': request})
             return Response(serializer.data)
             
@@ -282,7 +296,7 @@ class ComboProductViewSet(viewsets.ModelViewSet):
                 ComboProductImage.objects.create(combo_product=instance, image=image, is_primary=is_primary)
                 if is_primary:
                     instance.image = image
-                    instance.save()
+                    instance.save()   
 
 class ProductImageViewSet(viewsets.ModelViewSet):
     queryset = ProductImage.objects.all()
