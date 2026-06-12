@@ -27,11 +27,11 @@ def generate_invoice_on_payment(sender, instance, created, **kwargs):
             if payment_status == 'PAID' and old_status != 'PAID':
                 send_invoice_email(inv)
         return
-
+    
     # Do not generate invoice if payment is not yet completed/paid
     if not is_paid:
         return
-
+    
     # Group order items by seller to create one invoice per seller
     seller_items = {}
     for item in order.items.all():
