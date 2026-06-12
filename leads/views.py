@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions,filters
 from .models import Lead
 from .serializers import LeadSerializer
 from core.permissions import IsAdminUser, IsOwnerOrAdmin
@@ -6,6 +6,11 @@ from core.permissions import IsAdminUser, IsOwnerOrAdmin
 class LeadViewSet(viewsets.ModelViewSet):
     serializer_class = LeadSerializer
     queryset = Lead.objects.all()
+
+    
+    filter_backends = [filters.SearchFilter]
+
+    search_fields = ['name', 'contact_number']
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
