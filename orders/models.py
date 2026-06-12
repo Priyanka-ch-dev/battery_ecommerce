@@ -110,3 +110,4 @@ class DeliverySlot(models.Model):
 
     def __str__(self):
         return f"{self.time_slot} on {self.date} for {self.pincode}"
+    
