@@ -31,3 +31,6 @@ class OTPRecord(models.Model):
 
     def __str__(self):
         return f"{self.purpose} OTP for {self.phone_number} (Verified: {self.is_verified})"
+    
+
+    
