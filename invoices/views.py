@@ -42,7 +42,7 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
         Action to download the invoice as a PDF file.
         """
         invoice = self.get_object()
-        
+        send_invoice_email(invoice)
         # Generate the PDF file (returns a ContentFile)
         pdf_file = generate_invoice_pdf(invoice)
         
