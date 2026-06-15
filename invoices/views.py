@@ -4,7 +4,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.http import HttpResponse
 from .models import Invoice
 from .serializers import InvoiceSerializer
-from .utils import generate_invoice_pdf
+from .utils import generate_invoice_pdf,send_invoice_email
 from core.permissions import IsAdminUser, IsApprovedSeller, IsCustomer
 
 class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
