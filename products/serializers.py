@@ -92,10 +92,15 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_pincode_names(self, obj):
         return [p.pincode for p in obj.pincodes.all()]
 
+    base_price = serializers.ReadOnlyField()
+    gst_amount = serializers.ReadOnlyField()
+    final_price = serializers.ReadOnlyField()
+
     class Meta:
         model = Product
         fields = [
             'id', 'name', 'slug', 'sku', 'description', 'price', 'special_price', 
+            'gst_rate', 'base_price', 'gst_amount', 'final_price', 'fuel_type',
             'stock', 'is_active', 'warranty', 'view_count', 'created_at',
             'category', 'category_names', 'brand', 'brand_names', 'seller',
             'make', 'make_names', 'model', 'model_names', 'state', 'state_names', 
@@ -216,10 +221,14 @@ class ComboProductSerializer(serializers.ModelSerializer):
     specifications = ComboProductSpecificationSerializer(many=True, read_only=True)
     images = ComboProductImageSerializer(many=True, read_only=True)
 
+    base_price = serializers.ReadOnlyField()
+    gst_amount = serializers.ReadOnlyField()
+    final_price = serializers.ReadOnlyField()
+
     class Meta:
         model = ComboProduct
         fields = [
-            'id', 'name', 'slug', 'sku', 'price', 'special_price', 'description', 'image', 'inverter', 'battery',
+            'id', 'name', 'slug', 'sku', 'price', 'special_price', 'gst_rate', 'base_price', 'gst_amount', 'final_price', 'fuel_type', 'description', 'image', 'inverter', 'battery',
             'inverter_name', 'battery_name', 'warranty', 'is_active', 'created_at', 'view_count', 'stock',
             'category', 'category_names', 'brand', 'brand_names',
             'state', 'state_names', 'city', 'city_names', 'pincodes', 'pincode_names', 'make', 'make_names',

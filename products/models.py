@@ -72,9 +72,21 @@ class Product(models.Model):
     slug = models.SlugField(unique=True)
     sku = models.CharField(max_length=100, unique=True)
     description = models.TextField()
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # Pricing & Taxes
+    price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Base Price (Exclusive of GST)")
     special_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=28.00, help_text="GST Percentage (e.g., 28.00)")
+    
     stock = models.IntegerField(default=0)
+    
+    # Classification
+    fuel_type = models.CharField(
+        max_length=50, 
+        choices=[('Petrol', 'Petrol'), ('Diesel', 'Diesel'), ('CNG', 'CNG'), ('Electric', 'Electric'), ('Any', 'Any')], 
+        default='Any'
+    )
+    
     is_active = models.BooleanField(default=True)
     warranty = models.CharField(max_length=255, null=True, blank=True)
     view_count = models.PositiveIntegerField(default=0)
@@ -82,6 +94,18 @@ class Product(models.Model):
 
     # Battery Finder Relation
     compatible_vehicles = models.ManyToManyField(Vehicle, related_name='compatible_batteries', blank=True)
+
+    @property
+    def base_price(self):
+        return self.price
+
+    @property
+    def gst_amount(self):
+        return (self.price * self.gst_rate) / 100
+
+    @property
+    def final_price(self):
+        return self.price + self.gst_amount
 
     def __str__(self):
         return self.name
@@ -127,7 +151,8 @@ class ComboProduct(models.Model):
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True, null=True, blank=True)
     sku = models.CharField(max_length=100, unique=True, null=True, blank=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Base Price (Exclusive of GST)")
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=28.00, help_text="GST Percentage")
     image = models.ImageField(upload_to='combos/', blank=True, null=True)
     
     # Components
@@ -158,11 +183,28 @@ class ComboProduct(models.Model):
     make = models.ManyToManyField(Make, blank=True, related_name='combos')
     model = models.ManyToManyField(VehicleModel, blank=True, related_name='combos')
     compatible_vehicles = models.ManyToManyField(Vehicle, related_name='compatible_combos', blank=True)
+    fuel_type = models.CharField(
+        max_length=50, 
+        choices=[('Petrol', 'Petrol'), ('Diesel', 'Diesel'), ('CNG', 'CNG'), ('Electric', 'Electric'), ('Any', 'Any')], 
+        default='Any'
+    )
 
     @property
     def stock(self):
         # Combo stock is the minimum of its components
         return min(self.inverter.stock, self.battery.stock)
+
+    @property
+    def base_price(self):
+        return self.price
+
+    @property
+    def gst_amount(self):
+        return (self.price * self.gst_rate) / 100
+
+    @property
+    def final_price(self):
+        return self.price + self.gst_amount
 
     def __str__(self):
         return self.name
