@@ -22,7 +22,7 @@ class SellerProfileSerializer(serializers.ModelSerializer):
             "commission", "commission_amt", "gst", "gst_number", "pan_number", "aadhaar_number", 
             "shop_license_number",
 
-            "pan_card_copy", "aadhaar_card_copy", "shop_license_copy", "authorized_letter",
+            "pan_card_copy", "aadhaar_card_copy", "shop_license_copy", "authorized_letter", "msme_letter_copy",
             "bank_account_name", "bank_account_number", "bank_ifsc", "bank_name", "bank_account_type", "bank_passbook_copy",
             "shop_image", "owner_image"
         ]
@@ -38,7 +38,7 @@ class SellerProfileSerializer(serializers.ModelSerializer):
         # List of important fields to check
         important_fields = [
             'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
-            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'authorized_letter',
+            'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'authorized_letter', 'msme_letter_copy',
             'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_account_type',
             'bank_passbook_copy', 'business_address', 'shop_image', 'owner_image'
         ]
@@ -50,7 +50,7 @@ class SellerProfileSerializer(serializers.ModelSerializer):
                 old_val = getattr(instance, field)
                 
                 # Check for file updates
-                if field in ['pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'authorized_letter', 'bank_passbook_copy', 'shop_image', 'owner_image']:
+                if field in ['pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'authorized_letter', 'msme_letter_copy', 'bank_passbook_copy', 'shop_image', 'owner_image']:
                     from django.core.files import File as DjangoFile
                     if isinstance(new_val, DjangoFile):
                         has_changed = True

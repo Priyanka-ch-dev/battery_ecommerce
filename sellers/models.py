@@ -26,6 +26,7 @@ class SellerProfile(models.Model):
     aadhaar_card_copy = models.FileField(upload_to='seller_docs/aadhaar/', blank=True, null=True)
     shop_license_copy = models.FileField(upload_to='seller_docs/license/', blank=True, null=True)
     authorized_letter = models.FileField(upload_to='seller_docs/auth/', blank=True, null=True)
+    msme_letter_copy = models.FileField(upload_to='seller_docs/msme/', blank=True, null=True)
     
     # Bank Details
     bank_account_name = models.CharField(max_length=255, blank=True, null=True)
