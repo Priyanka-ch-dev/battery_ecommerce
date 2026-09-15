@@ -163,6 +163,17 @@ class ProductViewSet(viewsets.ModelViewSet):
                 ProductImage.objects.create(product=product, image=image, is_primary=is_primary)
 
     @action(detail=False, methods=['get'])
+    def types(self, request):
+        categories = Category.objects.values('id', 'name', 'slug')
+        return Response(categories)
+
+    @action(detail=False, methods=['get'])
+    def brands(self, request):
+        brands = Brand.objects.values('id', 'name', 'slug')
+        return Response(brands)
+
+
+    @action(detail=False, methods=['get'])
     def filter(self, request):
         make_ids = request.query_params.getlist('make_id')
         model_ids = request.query_params.getlist('model_id')
