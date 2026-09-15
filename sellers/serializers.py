@@ -100,10 +100,20 @@ class SellerWalletSerializer(serializers.ModelSerializer):
         ]
 
 class WithdrawalRequestSerializer(serializers.ModelSerializer):
+    seller_name = serializers.SerializerMethodField()
+
     class Meta:
         model = WithdrawalRequest
-        fields = '__all__'
-        read_only_fields = ['seller', 'status', 'processed_at']
+        fields = ['id', 'seller', 'seller_name', 'amount', 'status', 'payment_method', 'transaction_id', 'requested_at', 'processed_at']
+        read_only_fields = ['seller', 'seller_name', 'status', 'processed_at']
+
+    def get_seller_name(self, obj):
+        if obj.seller and obj.seller.user:
+            name = f"{obj.seller.user.first_name} {obj.seller.user.last_name}".strip()
+            return name or obj.seller.user.username
+        if obj.seller and obj.seller.business_name:
+            return obj.seller.business_name
+        return "Unknown Seller"
 
 class AdminSellerCreateSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
