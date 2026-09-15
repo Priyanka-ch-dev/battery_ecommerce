@@ -49,12 +49,13 @@ class RegisterSerializer(serializers.ModelSerializer):
     aadhaar_number = serializers.CharField(write_only=True, required=False)
     shop_license_number = serializers.CharField(write_only=True, required=False)
     
-    # Documents
     pan_card_copy = serializers.FileField(write_only=True, required=False)
     aadhaar_card_copy = serializers.FileField(write_only=True, required=False)
     shop_license_copy = serializers.FileField(write_only=True, required=False)
     shop_image = serializers.ImageField(write_only=True, required=False)
     owner_image = serializers.ImageField(write_only=True, required=False)
+    authorized_letter = serializers.FileField(write_only=True, required=False)
+    msme_letter_copy = serializers.FileField(write_only=True, required=False)
     
     # Bank Details
     bank_account_name = serializers.CharField(write_only=True, required=False)
@@ -72,6 +73,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             'username', 'email', 'password', 'role', 'phone_number', 'first_name', 'last_name',
             'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
             'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'shop_image', 'owner_image',
+            'authorized_letter', 'msme_letter_copy',
             'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
             'business_address'
         ]
@@ -97,11 +99,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         seller_fields = [
             'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
             'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'shop_image', 'owner_image',
+            'authorized_letter', 'msme_letter_copy',
             'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
             'business_address'
         ]
         
-        file_fields = ['pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'bank_passbook_copy', 'shop_image', 'owner_image']
+        file_fields = ['pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'bank_passbook_copy', 'shop_image', 'owner_image', 'authorized_letter', 'msme_letter_copy']
 
         if role != User.Role.SELLER:
             for field in seller_fields:
@@ -126,6 +129,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         seller_fields = [
             'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
             'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'shop_image', 'owner_image',
+            'authorized_letter', 'msme_letter_copy',
             'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
             'business_address'
         ]
@@ -158,6 +162,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         seller_fields = [
             'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
             'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'shop_image', 'owner_image',
+            'authorized_letter', 'msme_letter_copy',
             'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
             'business_address'
         ]
