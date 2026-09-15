@@ -4,11 +4,12 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, Image
 from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage
 from django.conf import settings
 import datetime
+import os
 
 def generate_invoice_pdf(invoice):
     """
@@ -63,20 +64,30 @@ def generate_invoice_pdf(invoice):
     )
 
     # 1. Header: Brand & Invoice Title
+    logo_path = os.path.join(settings.MEDIA_ROOT, 'logo.png')
+    if os.path.exists(logo_path):
+        # Cropped ratio is ~6.47
+        brand_logo = Image(logo_path, width=80*mm, height=13*mm, hAlign='LEFT')
+    else:
+        brand_logo = Paragraph("<b>BATTERIES BAZAAR</b>", style_company)
+
     header_data = [
         [
-            Paragraph("<b>BATTERIES BAZAAR</b>", style_company),
+            brand_logo,
             Paragraph("INVOICE", style_title)
         ],
         [
-            Paragraph("Support: support@batteriesbazaar.com<br/>Phone: +91 98765 43210", styles['Normal']),
+            Paragraph("Support: support@batteriesbazaar.com<br/>Phone: +91 9483808080 / 9731140727", styles['Normal']),
             ""
         ]
     ]
     header_table = Table(header_data, colWidths=[110*mm, 70*mm])
     header_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (0, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
     ]))
     elements.append(header_table)
     elements.append(Spacer(1, 10*mm))

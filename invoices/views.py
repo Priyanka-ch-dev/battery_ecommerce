@@ -17,12 +17,12 @@ class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ['customer_name', 'customer_email', 'invoice_id', 'order__id']
     ordering_fields = ['invoice_date', 'total_amount']
     ordering = ['-invoice_date']
-
+ 
     def get_queryset(self):
         user = self.request.user
         if not user.is_authenticated:
             return Invoice.objects.none()
-            
+           
         if getattr(user, 'role', '') == 'ADMIN' or getattr(user, 'is_superuser', False):
             return Invoice.objects.all()
         elif getattr(user, 'role', '') == 'SELLER':

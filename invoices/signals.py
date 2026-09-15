@@ -39,7 +39,7 @@ def generate_invoice_on_payment(sender, instance, created, **kwargs):
         if seller not in seller_items:
             seller_items[seller] = []
         seller_items[seller].append(item)
-
+    
     for seller, items in seller_items.items():
         total_amount = sum(item.total_amount for item in items)
         commission_amount = sum(item.admin_commission_amount for item in items)
