@@ -62,6 +62,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     bank_account_number = serializers.CharField(write_only=True, required=False)
     bank_ifsc = serializers.CharField(write_only=True, required=False)
     bank_name = serializers.CharField(write_only=True, required=False)
+    bank_branch_name = serializers.CharField(write_only=True, required=False)
     bank_passbook_copy = serializers.FileField(write_only=True, required=False)
     
     # Address
@@ -74,7 +75,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
             'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'shop_image', 'owner_image',
             'authorized_letter', 'msme_letter_copy',
-            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
+            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_branch_name', 'bank_passbook_copy',
             'business_address'
         ]
 
@@ -100,7 +101,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
             'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'shop_image', 'owner_image',
             'authorized_letter', 'msme_letter_copy',
-            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
+            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_branch_name', 'bank_passbook_copy',
             'business_address'
         ]
         
@@ -130,7 +131,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
             'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'shop_image', 'owner_image',
             'authorized_letter', 'msme_letter_copy',
-            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
+            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_branch_name', 'bank_passbook_copy',
             'business_address'
         ]
 
@@ -163,7 +164,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
             'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'shop_image', 'owner_image',
             'authorized_letter', 'msme_letter_copy',
-            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_passbook_copy',
+            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_branch_name', 'bank_passbook_copy',
             'business_address'
         ]
         seller_data = {field: validated_data.pop(field, None) for field in seller_fields}
