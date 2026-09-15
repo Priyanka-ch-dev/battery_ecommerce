@@ -23,7 +23,7 @@ class SellerProfileSerializer(serializers.ModelSerializer):
             "shop_license_number",
 
             "pan_card_copy", "aadhaar_card_copy", "shop_license_copy", "authorized_letter", "msme_letter_copy",
-            "bank_account_name", "bank_account_number", "bank_ifsc", "bank_name", "bank_account_type", "bank_passbook_copy",
+            "bank_account_name", "bank_account_number", "bank_ifsc", "bank_name", "bank_branch_name", "bank_account_type", "bank_passbook_copy",
             "shop_image", "owner_image"
         ]
         read_only_fields = ['user', 'status', 'is_approved', 'has_been_approved']
@@ -39,7 +39,7 @@ class SellerProfileSerializer(serializers.ModelSerializer):
         important_fields = [
             'business_name', 'gst_number', 'pan_number', 'aadhaar_number', 'shop_license_number',
             'pan_card_copy', 'aadhaar_card_copy', 'shop_license_copy', 'authorized_letter', 'msme_letter_copy',
-            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_account_type',
+            'bank_account_name', 'bank_account_number', 'bank_ifsc', 'bank_name', 'bank_branch_name', 'bank_account_type',
             'bank_passbook_copy', 'business_address', 'shop_image', 'owner_image'
         ]
         

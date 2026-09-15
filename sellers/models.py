@@ -33,6 +33,7 @@ class SellerProfile(models.Model):
     bank_account_number = models.CharField(max_length=50, blank=True, null=True)
     bank_ifsc = models.CharField(max_length=20, blank=True, null=True)
     bank_name = models.CharField(max_length=255, blank=True, null=True)
+    bank_branch_name = models.CharField(max_length=255, blank=True, null=True)
     bank_account_type = models.CharField(max_length=50, blank=True, null=True, help_text="Savings / Current / etc.")
     bank_passbook_copy = models.FileField(upload_to='seller_docs/bank/', blank=True, null=True)
     
