@@ -62,7 +62,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['category', 'brand', 'is_active', 'make', 'model', 'state', 'city']
+    filterset_fields = ['category', 'brand', 'is_active', 'make', 'model', 'state', 'city', 'fuel_type']
     search_fields = ['name', 'slug', 'sku', 'description']
     ordering_fields = ['price', 'created_at', 'stock']
 
@@ -70,6 +70,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'filter']:
             return UnifiedProductSerializer
         return ProductSerializer
+
+    @action(detail=False, methods=['get'])
+    def fuel_types(self, request):
+        choices = Product._meta.get_field('fuel_type').choices
+        data = [{"id": choice[0], "name": choice[1]} for choice in choices]
+        return Response(data)
 
     def get_queryset(self):
         queryset = Product.objects.all().prefetch_related('category', 'brand', 'make', 'model', 'state', 'city').select_related('seller')
@@ -203,6 +209,11 @@ class ProductViewSet(viewsets.ModelViewSet):
             product_qs = product_qs.filter(city__id__in=city_ids)
             combo_qs = combo_qs.filter(city__id__in=city_ids)
             
+        fuel_types = request.query_params.getlist('fuel_type')
+        if is_valid(fuel_types):
+            product_qs = product_qs.filter(fuel_type__in=fuel_types)
+            combo_qs = combo_qs.filter(fuel_type__in=fuel_types)
+            
         combined = list(product_qs.distinct()) + list(combo_qs.distinct())
         combined.sort(key=lambda x: x.created_at, reverse=True)
         
@@ -245,7 +256,7 @@ class ComboProductViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active', 'state', 'city', 'make', 'model']
+    filterset_fields = ['is_active', 'state', 'city', 'make', 'model', 'fuel_type']
     search_fields = ['name', 'slug', 'sku']
     ordering_fields = ['price', 'created_at']
 

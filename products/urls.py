@@ -17,6 +17,7 @@ router.register(r'combo-product-specifications', ComboProductSpecificationViewSe
 
 urlpatterns = [
     path('types/', ProductViewSet.as_view({'get': 'types'}), name='product-types'),
+    path('fuel_types/', ProductViewSet.as_view({'get': 'fuel_types'}), name='product-fuel-types'),
     path('filter/', ProductViewSet.as_view({'get': 'filter'}), name='product-filter'),
     path('', ProductViewSet.as_view({'get': 'list', 'post': 'create'}), name='product-list'),
     path('<int:pk>/', ProductViewSet.as_view({
