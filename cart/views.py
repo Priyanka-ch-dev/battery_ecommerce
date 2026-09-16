@@ -179,8 +179,11 @@ class CartViewSet(viewsets.ModelViewSet):
         return Response({
             "message": "Checkout successful. Order placed.",
             "order_id": order.id,
-            "grand_total": order.grand_total,
-            "tax": order.tax
+            "base_price": order.subtotal,
+            "discount": order.discount,
+            "tax_amount": order.tax,
+            "shipping_fee": order.shipping_fee,
+            "final_price": order.grand_total
         })
 
 from rest_framework.exceptions import ValidationError
