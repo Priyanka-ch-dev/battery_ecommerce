@@ -54,11 +54,11 @@ class CartViewSet(viewsets.ModelViewSet):
             )
             if not slot.is_active or slot.current_bookings >= slot.max_bookings:
                 contact_setting = ContactSettings.objects.first()
-                support_phone = contact_setting.support_phone if contact_setting and contact_setting.support_phone else "Support"
+                support_phone = contact_setting.support_phone if contact_setting and contact_setting.support_phone else "+91 9483808080 / 9731140727"
                 return Response({
-                    "error": "This delivery/installation slot is already booked for your area. Please select another available time slot or contact Customer Support.",
+                    "error": f"This delivery/installation slot is already booked for your area. Please select another available time slot or call {support_phone}",
                     "support_message": "For assistance or urgent bookings, please contact Customer Support.",
-                    "support_phone": "+91 9483808080 / 9731140727"
+                    "support_phone": support_phone
                 }, status=400)
             
         items = cart.items.all()
