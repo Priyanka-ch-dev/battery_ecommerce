@@ -23,9 +23,9 @@ class CartItemSerializer(serializers.ModelSerializer):
         return None
 
     def validate(self, data):
-        product = data.get('product')
-        combo_product = data.get('combo_product')
-        quantity = data.get('quantity', 1)
+        product = data.get('product', getattr(self.instance, 'product', None))
+        combo_product = data.get('combo_product', getattr(self.instance, 'combo_product', None))
+        quantity = data.get('quantity', getattr(self.instance, 'quantity', 1))
 
         if not product and not combo_product:
             raise serializers.ValidationError("Either product or combo_product must be provided.")
