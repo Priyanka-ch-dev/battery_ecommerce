@@ -50,9 +50,9 @@ class DeliverySlotViewSet(viewsets.ModelViewSet):
             if not slot.is_active or slot.current_bookings >= slot.max_bookings:
                 return Response({
                     "available": False,
-                    "error": "This delivery/installation slot is already booked for your area. Please select another available time slot or contact Customer Support.",
+                    "error": "This delivery/installation slot is already booked for your area. Please select another available time slot or call +91 9483808080 / 9731140727",
                     "support_message": "For assistance or urgent bookings, please contact Customer Support.",
-                    "support_phone": support_phone
+                    "support_phone": "+91 9483808080 / 9731140727"
                 }, status=status.HTTP_200_OK)
 
         return Response({
